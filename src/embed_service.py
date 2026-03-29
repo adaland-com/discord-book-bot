@@ -6,7 +6,7 @@ from src.clients.open_library import BookData
 
 def create_book_embed(book_info: BookData) -> discord.Embed:
     embed = discord.Embed(
-        title=book_info.title or 'Unknown Title',
+        title=book_info.title,
         url=book_info.url,
         color=EMBED.color
     )
@@ -42,12 +42,11 @@ def create_book_embed(book_info: BookData) -> discord.Embed:
     
     embed.set_footer(text=f"Source: {book_info.source}")
     
-    if book_info.goodreads_url:
-        embed.add_field(
-            name=f"{EMBED.emoji_link} Goodreads",
-            value=book_info.goodreads_url,
-            inline=False
-        )
+    embed.add_field(
+        name=f"{EMBED.emoji_link} Goodreads",
+        value=book_info.goodreads_url,
+        inline=False
+    )
     
     return embed
 

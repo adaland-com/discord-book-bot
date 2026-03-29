@@ -11,6 +11,13 @@ from config import OPEN_LIBRARY, RATE_LIMIT, SEARCH
 _MIN_DESC_LENGTH = 10
 _MIN_SENTENCE_LENGTH = 5
 
+# Open Library API search fields - used for validation
+_SEARCH_FIELDS = [
+    'key', 'title', 'description', 'author_name', 'author_key',
+    'first_publish_year', 'cover_i', 'ratings_average', 'subject',
+    'language', 'edition_count', 'isbn'
+]
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,7 +73,7 @@ def search_books(
     params = {
         'q': query,
         'limit': limit,
-        'fields': 'key,title,description,author_name,author_key,first_publish_year,cover_i,ratings_average,subject,language,edition_count,isbn'
+        'fields': ','.join(_SEARCH_FIELDS)
     }
     
     if language:
@@ -76,9 +83,16 @@ def search_books(
     if data is None:
         return None
     
+    # Validate response structure to detect schema drift
+    docs = data.get('docs', [])
+    if docs and isinstance(docs[0], dict):
+        missing_fields = [f for f in _SEARCH_FIELDS if f not in docs[0]]
+        if missing_fields:
+            logger.warning(f"Open Library API response missing expected fields: {missing_fields}")
+    
     result = {
         'numFound': data.get('numFound', 0),
-        'books': data.get('docs', [])
+        'books': docs
     }
     
     return result
@@ -121,6 +135,8 @@ def _extract_description(data: Dict) -> str:
     desc = data.get('description')
     if isinstance(desc, dict):
         desc = desc.get('value', '')
+    elif isinstance(desc, list):
+        desc = ' '.join(desc)
     
     desc_str = str(desc).strip() if desc else ''
     if len(desc_str) > _MIN_DESC_LENGTH:
@@ -129,6 +145,9 @@ def _extract_description(data: Dict) -> str:
     first_sentence = data.get('first_sentence')
     if isinstance(first_sentence, dict):
         first_sentence = first_sentence.get('value', '')
+    elif isinstance(first_sentence, list):
+        first_sentence = ' '.join(first_sentence)
+    
     fs_str = str(first_sentence).strip() if first_sentence else ''
     if len(fs_str) > _MIN_SENTENCE_LENGTH:
         return f"First sentence: {fs_str}"
@@ -169,12 +188,17 @@ def _get_cover_url(ol_book: Dict) -> str:
 
 
 def _build_goodreads_link(title: Optional[str], author: Optional[str]) -> str:
+    """Build Goodreads search URL. Uses + for spaces as Goodreads expects."""
+    def encode_query(text: str) -> str:
+        # Goodreads prefers + for spaces, %20 works but + is more standard
+        return quote(text, safe='').replace('%20', '+')
+    
     if title and author:
-        return f"https://www.goodreads.com/search?q={quote(f'title:{title} author:{author}', safe='')}"  
+        return f"https://www.goodreads.com/search?q={encode_query(f'title:{title} author:{author}')}"
     if title:
-        return f"https://www.goodreads.com/search?q={quote(f'title:{title}', safe='')}"
+        return f"https://www.goodreads.com/search?q={encode_query(f'title:{title}')}"
     if author:
-        return f"https://www.goodreads.com/search?q={quote(f'author:{author}', safe='')}"
+        return f"https://www.goodreads.com/search?q={encode_query(f'author:{author}')}"
     return "https://www.goodreads.com"
 
 

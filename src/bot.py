@@ -72,7 +72,7 @@ class BookBot(commands.Bot):
         logger.info("Closing bot session...")
         try:
             self.session.close()
-        except Exception as e:
+        except (IOError, AttributeError) as e:
             logger.warning(f"Error closing session: {e}")
         await super().close()
 
