@@ -10,7 +10,6 @@ from config import OPEN_LIBRARY, RATE_LIMIT, SEARCH
 # Module-level constants
 _MIN_DESC_LENGTH = 10
 _MIN_SENTENCE_LENGTH = 5
-_COVER_SIZE_SUFFIX = SEARCH.cover_size
 
 logger = logging.getLogger(__name__)
 
@@ -123,14 +122,16 @@ def _extract_description(data: Dict) -> str:
     if isinstance(desc, dict):
         desc = desc.get('value', '')
     
-    if desc and len(str(desc).strip()) > _MIN_DESC_LENGTH:
-        return str(desc).strip()
+    desc_str = str(desc).strip() if desc else ''
+    if len(desc_str) > _MIN_DESC_LENGTH:
+        return desc_str
     
     first_sentence = data.get('first_sentence')
     if isinstance(first_sentence, dict):
         first_sentence = first_sentence.get('value', '')
-    if first_sentence and len(str(first_sentence).strip()) > _MIN_SENTENCE_LENGTH:
-        return f"First sentence: {str(first_sentence).strip()}"
+    fs_str = str(first_sentence).strip() if first_sentence else ''
+    if len(fs_str) > _MIN_SENTENCE_LENGTH:
+        return f"First sentence: {fs_str}"
     
     return ""
 
@@ -156,13 +157,13 @@ def fetch_description(
 def _get_cover_url(ol_book: Dict) -> str:
     cover_id = ol_book.get('cover_i')
     if cover_id:
-        return f"https://covers.openlibrary.org/b/id/{cover_id}{_COVER_SIZE_SUFFIX}"
+        return f"https://covers.openlibrary.org/b/id/{cover_id}{SEARCH.cover_size}"
     
     isbns = ol_book.get('isbn', [])
-    if isbns and isinstance(isbns[0], str):
+    if isinstance(isbns, list) and isbns and isinstance(isbns[0], str):
         # Use translate for single-pass character removal
         isbn = isbns[0].translate(str.maketrans('', '', '- '))
-        return f"{OPEN_LIBRARY.covers_url}/b/isbn/{isbn}{_COVER_SIZE_SUFFIX}"
+        return f"{OPEN_LIBRARY.covers_url}/b/isbn/{isbn}{SEARCH.cover_size}"
     
     return ""
 
@@ -228,11 +229,7 @@ def create_session() -> requests.Session:
 def build_search_query(title: Optional[str], author: Optional[str]) -> str:
     parts = []
     if title:
-        # Escape quotes to prevent query injection
-        safe_title = title.replace('"', '\\"')
-        parts.append(f'title:"{safe_title}"')
+        parts.append(f'title:"{title}"')
     if author:
-        # Escape quotes to prevent query injection
-        safe_author = author.replace('"', '\\"')
-        parts.append(f'author:"{safe_author}"')
+        parts.append(f'author:"{author}"')
     return ' '.join(parts)

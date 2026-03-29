@@ -49,7 +49,7 @@ async def _handle_book_command(
             book_info = await asyncio.to_thread(fetch_and_convert_book_data, session, result['books'][0])
         else:
             book_info = None
-    except Exception as e:
+    except (OSError, ValueError, TypeError, RuntimeError) as e:
         logger.error(f"[/book] search_failed error={type(e).__name__}: {e}")
         embed = create_error_embed("Search failed. Please try again.")
         await interaction.followup.send(embed=embed, ephemeral=True)

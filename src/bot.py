@@ -28,7 +28,7 @@ class RateLimiter:
         self._last_request_time: float = 0.0
         self._request_delay = request_delay
     
-    async def acquire(self):
+    async def acquire(self) -> None:
         """Acquire rate limit, sleeping if necessary."""
         async with self._lock:
             current_time = time.monotonic()
@@ -70,7 +70,10 @@ class BookBot(commands.Bot):
     async def close(self):
         """Clean up resources on shutdown."""
         logger.info("Closing bot session...")
-        self.session.close()
+        try:
+            self.session.close()
+        except Exception as e:
+            logger.warning(f"Error closing session: {e}")
         await super().close()
 
 
