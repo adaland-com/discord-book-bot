@@ -11,18 +11,15 @@ from src.services.embed_service import (
     create_error_embed,
 )
 from src.services.logging_service import log_usage
-from src.clients.open_library import create_session
 import requests
 
 
 class BookCommandHandler:
     
-    def __init__(self):
-        self.session: requests.Session = create_session()
-    
     async def handle(
         self,
         interaction: discord.Interaction,
+        session: requests.Session,
         title: Optional[str] = None,
         author: Optional[str] = None
     ) -> None:
@@ -48,7 +45,7 @@ class BookCommandHandler:
             "DM" if interaction.guild is None else f"Server: {interaction.guild.name}"
         )
         
-        book_info = await asyncio.to_thread(search_book, self.session, title, author)
+        book_info = await asyncio.to_thread(search_book, session, title, author)
         
         if book_info is None:
             message = create_no_results_message(title, author)
@@ -91,6 +88,7 @@ def create_book_command() -> app_commands.Command:
         title: Optional[str] = None,
         author: Optional[str] = None
     ):
-        await handler.handle(interaction, title, author)
+        session = interaction.client.session
+        await handler.handle(interaction, session, title, author)
     
     return book_command

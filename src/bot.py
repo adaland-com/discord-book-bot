@@ -44,7 +44,7 @@ def main():
     token = DISCORD.token
     
     if not token:
-        print("Error: No Discord token found. Please set DISCORD_TOKEN  in .env")
+        print("Error: No Discord token found. Please set DISCORD_TOKEN in .env")
         return
     
     bot = BookBot()

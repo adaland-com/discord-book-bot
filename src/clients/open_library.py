@@ -1,11 +1,11 @@
-import time
 import logging
+import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from urllib.parse import quote
 import requests
 
-from config import OPEN_LIBRARY, RATE_LIMIT, CACHE
+from config import OPEN_LIBRARY, RATE_LIMIT
 
 logger = logging.getLogger(__name__)
 
@@ -25,41 +25,7 @@ class BookData:
     edition_count: int
 
 
-_cache_store: Dict[str, tuple[float, Any]] = {}
-MAX_CACHE_SIZE = 1000
-
-
-def _evict_oldest_if_needed() -> None:
-    if len(_cache_store) >= MAX_CACHE_SIZE:
-        sorted_items = sorted(_cache_store.items(), key=lambda x: x[1][0])
-        to_remove = int(MAX_CACHE_SIZE * 0.2)
-        for key, _ in sorted_items[:to_remove]:
-            del _cache_store[key]
-        logger.debug(f"Evicted {to_remove} oldest cache entries")
-
-
-def _get_cache_key(query: str, limit: int, language: Optional[str]) -> str:
-    return f"ol_search_{query.lower().strip()}_{limit}_{language}"
-
-
-def _get_from_cache(cache_key: str) -> Optional[Any]:
-    if not CACHE.enabled:
-        return None
-    
-    cached = _cache_store.get(cache_key)
-    if cached:
-        timestamp, data = cached
-        if (time.time() - timestamp) < CACHE.ttl_seconds:
-            logger.debug(f"Cache hit for key: {cache_key}")
-            return data
-    return None
-
-
-def _store_in_cache(cache_key: str, data: Any) -> None:
-    if CACHE.enabled:
-        _evict_oldest_if_needed()
-        _cache_store[cache_key] = (time.time(), data)
-        logger.debug(f"Stored in cache: {cache_key}")
+_last_request_time: float = 0.0
 
 
 def _rate_limited_request(
@@ -68,16 +34,16 @@ def _rate_limited_request(
     params: Optional[Dict] = None,
     timeout: int = 10
 ) -> requests.Response:
+    global _last_request_time
     current_time = time.time()
-    if hasattr(_rate_limited_request, '_last_request_time'):
-        time_since_last = current_time - _rate_limited_request._last_request_time
-        if time_since_last < RATE_LIMIT.request_delay:
-            delay = RATE_LIMIT.request_delay - time_since_last
-            logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
-            time.sleep(delay)
+    time_since_last = current_time - _last_request_time
+    if time_since_last < RATE_LIMIT.request_delay:
+        delay = RATE_LIMIT.request_delay - time_since_last
+        logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
+        time.sleep(delay)
     
     response = session.get(url, params=params, timeout=timeout)
-    _rate_limited_request._last_request_time = time.time()
+    _last_request_time = time.time()
     return response
 
 
@@ -112,11 +78,6 @@ def search_books(
 ) -> Optional[Dict[str, Any]]:
     logger.info(f"Searching Open Library for: '{query}' (limit={limit})")
     
-    cache_key = _get_cache_key(query, limit, language)
-    cached_result = _get_from_cache(cache_key)
-    if cached_result is not None:
-        return cached_result
-    
     url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.search_endpoint}"
     params = {
         'q': query,
@@ -136,7 +97,6 @@ def search_books(
         'books': data.get('docs', [])
     }
     
-    _store_in_cache(cache_key, result)
     return result
 
 
@@ -146,21 +106,11 @@ def get_book_details(
 ) -> Optional[Dict]:
     logger.info(f"Getting book details for work: {work_key}")
     
-    cache_key = f"ol_details_{work_key}"
-    cached_result = _get_from_cache(cache_key)
-    if cached_result is not None:
-        return cached_result
-    
     if work_key.startswith('/works/'):
         work_key = work_key[7:]
     
     url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.works_endpoint}/{work_key}.json"
-    data = _make_request_with_retry(session, url)
-    
-    if data:
-        _store_in_cache(cache_key, data)
-    
-    return data
+    return _make_request_with_retry(session, url)
 
 
 def get_edition_details(
@@ -169,21 +119,11 @@ def get_edition_details(
 ) -> Optional[Dict]:
     logger.info(f"Getting edition details for: {edition_key}")
     
-    cache_key = f"ol_edition_{edition_key}"
-    cached_result = _get_from_cache(cache_key)
-    if cached_result is not None:
-        return cached_result
-    
     if edition_key.startswith('/books/'):
         edition_key = edition_key[7:]
     
     url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.books_endpoint}/{edition_key}.json"
-    data = _make_request_with_retry(session, url)
-    
-    if data:
-        _store_in_cache(cache_key, data)
-    
-    return data
+    return _make_request_with_retry(session, url)
 
 
 def _extract_description(work_details: Optional[Dict]) -> str:

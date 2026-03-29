@@ -1,5 +1,6 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 import requests
+from dataclasses import asdict
 
 from src.clients.open_library import (
     search_books,
@@ -41,23 +42,9 @@ def search_book(
 ) -> Optional[Dict[str, Any]]:
     result = search_open_library(session, title, author)
     if result:
-        return _book_data_to_dict(result)
+        return asdict(result)
     
     return None
-
-
-def _book_data_to_dict(book_data: BookData) -> Dict[str, Any]:
-    return {
-        'title': book_data.title,
-        'author': book_data.author,
-        'rating': book_data.rating,
-        'description': book_data.description,
-        'cover_url': book_data.cover_url,
-        'publication_year': book_data.publication_year,
-        'url': book_data.url,
-        'source': book_data.source,
-        'goodreads_url': book_data.goodreads_url,
-    }
 
 
 def validate_search_params(
