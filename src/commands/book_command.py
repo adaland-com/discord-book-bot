@@ -46,13 +46,18 @@ async def _handle_book_command(
     session = interaction.client.session
     try:
         query = build_search_query(title, author)
+        
+        # Rate limit before API call
+        await interaction.client.rate_limiter.acquire()
         result = await asyncio.to_thread(search_books, session, query, limit=SEARCH.max_results)
         
         if result and result.get('books'):
+            # Rate limit before API call
+            await interaction.client.rate_limiter.acquire()
             book_info = await asyncio.to_thread(fetch_and_convert_book_data, session, result['books'][0])
         else:
             book_info = None
-    except (requests.RequestException, asyncio.TimeoutError) as e:
+    except requests.RequestException as e:
         logger.error(f"[/book] search_failed error={type(e).__name__}: {e}")
         embed = create_error_embed("Search failed. Please try again.")
         await interaction.followup.send(embed=embed, ephemeral=True)

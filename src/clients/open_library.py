@@ -1,5 +1,4 @@
 import logging
-import threading
 import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
@@ -31,43 +30,17 @@ class BookData:
     edition_count: int
 
 
-_rate_limit_lock = threading.Lock()
-_last_request_time: float = 0.0
-
-
-def _rate_limited_request(
-    session: requests.Session,
-    url: str,
-    params: Optional[Dict] = None,
-    timeout: int = SEARCH.timeout
-) -> requests.Response:
-    global _last_request_time
-    
-    # Atomic rate limit check and update
-    with _rate_limit_lock:
-        current_time = time.time()
-        time_since_last = current_time - _last_request_time
-        delay = max(0, RATE_LIMIT.request_delay - time_since_last)
-        
-        if delay > 0:
-            logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
-            time.sleep(delay)
-        
-        response = session.get(url, params=params, timeout=timeout)
-        _last_request_time = time.time()
-        
-        return response
-
-
 def _make_request_with_retry(
     session: requests.Session,
     url: str,
     params: Optional[Dict] = None,
-    max_retries: int = RATE_LIMIT.max_retries
+    max_retries: int = RATE_LIMIT.max_retries,
+    timeout: int = SEARCH.timeout
 ) -> Optional[Dict]:
+    """Make HTTP request with exponential backoff retry."""
     for attempt in range(max_retries):
         try:
-            response = _rate_limited_request(session, url, params)
+            response = session.get(url, params=params, timeout=timeout)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -140,24 +113,31 @@ def get_edition_details(
     return _make_request_with_retry(session, url)
 
 
-def _extract_description(work_details: Optional[Dict]) -> str:
-    if not work_details:
-        return "No description available."
+def _extract_description(data: Dict) -> str:
+    """Extract description from work details or search result data.
     
-    desc = work_details.get('description')
+    Handles both full work details and search result data since they share
+    the same field structure for description and first_sentence.
+    """
+    desc = data.get('description')
     if isinstance(desc, dict):
         desc = desc.get('value', '')
     
     if desc and len(str(desc).strip()) > _MIN_DESC_LENGTH:
         return str(desc).strip()
     
-    first_sentence = work_details.get('first_sentence')
+    first_sentence = data.get('first_sentence')
     if isinstance(first_sentence, dict):
         first_sentence = first_sentence.get('value', '')
     if first_sentence and len(str(first_sentence).strip()) > _MIN_SENTENCE_LENGTH:
         return f"First sentence: {str(first_sentence).strip()}"
     
     return "No description available."
+
+
+def _extract_description_from_search(ol_book: Dict) -> str:
+    """Extract description from search result data without HTTP call."""
+    return _extract_description(ol_book)
 
 
 def fetch_description(
@@ -208,9 +188,9 @@ def fetch_and_convert_book_data(
     session: requests.Session,
     ol_book: Dict
 ) -> BookData:
-    """Fetch additional book data (description) and convert to BookData.
+    """Convert Open Library search result to BookData.
     
-    Note: This function makes an HTTP request to fetch the book description.
+    Uses description from search results if available, otherwise fetches details.
     """
     authors = ol_book.get('author_name', [])
     author = ', '.join(authors) if authors else "Unknown Author"
@@ -220,8 +200,15 @@ def fetch_and_convert_book_data(
         rating = float(rating)
     
     cover_url = _get_cover_url(ol_book)
-    raw_description = fetch_description(session, ol_book.get('key'))
-    description = raw_description if raw_description is not None else "No description available."
+    
+    # Use description from search results if available, skip HTTP call
+    raw_description = _extract_description_from_search(ol_book)
+    if raw_description and raw_description != "No description available.":
+        description = raw_description
+    else:
+        # Fall back to fetching details via HTTP
+        fetched = fetch_description(session, ol_book.get('key'))
+        description = fetched if fetched is not None else "No description available."
     
     title = ol_book.get('title', 'Unknown Title')
     

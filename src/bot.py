@@ -1,9 +1,10 @@
+import asyncio
 import logging
 import discord
 from discord.ext import commands
 from discord import app_commands
 
-from config import DISCORD
+from config import DISCORD, RATE_LIMIT
 from src.commands import (
     create_book_command,
     create_help_command,
@@ -18,6 +19,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class RateLimiter:
+    """Async-compatible rate limiter for Open Library API calls."""
+    
+    def __init__(self, request_delay: float):
+        self._lock = asyncio.Lock()
+        self._last_request_time: float = 0.0
+        self._request_delay = request_delay
+    
+    async def acquire(self):
+        """Acquire rate limit, sleeping if necessary."""
+        async with self._lock:
+            current_time = asyncio.get_event_loop().time()
+            time_since_last = current_time - self._last_request_time
+            delay = max(0, self._request_delay - time_since_last)
+            
+            if delay > 0:
+                logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
+                await asyncio.sleep(delay)
+            
+            self._last_request_time = asyncio.get_event_loop().time()
+
+
 class BookBot(commands.Bot):
     
     def __init__(self):
@@ -29,6 +52,7 @@ class BookBot(commands.Bot):
         )
         
         self.session = create_session()
+        self.rate_limiter = RateLimiter(RATE_LIMIT.request_delay)
     
     async def setup_hook(self):
         self.tree.add_command(create_book_command())
