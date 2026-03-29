@@ -13,21 +13,21 @@ def create_book_embed(book_info: BookData) -> discord.Embed:
     
     if book_info.author:
         embed.add_field(
-            name="👤 Author",
+            name=f"{EMBED.emoji_author} Author",
             value=book_info.author,
             inline=False
         )
     
     if book_info.rating:
         embed.add_field(
-            name="⭐ Rating",
+            name=f"{EMBED.emoji_rating} Rating",
             value=f"{book_info.rating}/5.0",
             inline=True
         )
     
     if book_info.publication_year:
         embed.add_field(
-            name="📅 Year",
+            name=f"{EMBED.emoji_year} Year",
             value=str(book_info.publication_year),
             inline=True
         )
@@ -44,7 +44,7 @@ def create_book_embed(book_info: BookData) -> discord.Embed:
     
     if book_info.goodreads_url:
         embed.add_field(
-            name="🔗 Goodreads",
+            name=f"{EMBED.emoji_link} Goodreads",
             value=book_info.goodreads_url,
             inline=False
         )

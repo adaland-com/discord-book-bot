@@ -32,6 +32,11 @@ class EmbedConfig:
     error_color: int = 0xFF0000
     max_description_length: int = 200
     archive_link: str = "https://shadowlibraries.github.io/DirectDownloads/AnnasArchive/"
+    emoji_author: str = "👤"
+    emoji_rating: str = "⭐"
+    emoji_year: str = "📅"
+    emoji_link: str = "🔗"
+    emoji_archive: str = "🏴‍☠️"
 
 @dataclass(frozen=True)
 class SearchConfig:

@@ -2,7 +2,7 @@ import logging
 import discord
 from discord import app_commands
 
-from src.services.embed_service import create_help_embed
+from src.embed_service import create_help_embed
 
 logger = logging.getLogger(__name__)
 
