@@ -1,66 +1,90 @@
 """Centralized configuration for the Discord Book Bot."""
 import os
-from dataclasses import dataclass
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
 def _parse_bool(value: str) -> bool:
-    """Parse a string value as boolean."""
+    """Parse a string value as boolean (case-insensitive)."""
     return value.lower() in ('true', '1', 'yes', 'on')
 
 
-@dataclass(frozen=True)
-class DiscordConfig:
-    token: str
-    restrict_dm_to_guild_members: bool = False
+# Discord Configuration
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN', '')
+DISCORD_RESTRICT_DM = _parse_bool(os.getenv('RESTRICT_DM_TO_GUILD_MEMBERS', 'false'))
 
-@dataclass(frozen=True)
-class OpenLibraryConfig:
-    base_url: str = "https://openlibrary.org"
-    search_endpoint: str = "/search.json"
-    works_endpoint: str = "/works"
-    books_endpoint: str = "/books"
-    covers_url: str = "https://covers.openlibrary.org"
+# Open Library API
+OPEN_LIBRARY_BASE_URL = "https://openlibrary.org"
+OPEN_LIBRARY_SEARCH_ENDPOINT = "/search.json"
+OPEN_LIBRARY_WORKS_ENDPOINT = "/works"
+OPEN_LIBRARY_BOOKS_ENDPOINT = "/books"
+OPEN_LIBRARY_COVERS_URL = "https://covers.openlibrary.org"
 
-@dataclass(frozen=True)
-class RateLimitConfig:
-    request_delay: float = 1.0
-    max_retries: int = 3
-    retry_delay: float = 2.0
+# Rate Limiting
+RATE_LIMIT_REQUEST_DELAY = 1.0
+RATE_LIMIT_MAX_RETRIES = 3
+RATE_LIMIT_RETRY_DELAY = 2.0
+
+# Embed Settings
+EMBED_COLOR = 0x00b4d8
+EMBED_ERROR_COLOR = 0xFF0000
+EMBED_MAX_DESCRIPTION_LENGTH = 200
+EMBED_ARCHIVE_LINK = "https://shadowlibraries.github.io/DirectDownloads/AnnasArchive/"
+EMBED_EMOJI_AUTHOR = "👤"
+EMBED_EMOJI_RATING = "⭐"
+EMBED_EMOJI_YEAR = "�"
+EMBED_EMOJI_LINK = "🔗"
+EMBED_EMOJI_ARCHIVE = "🏴‍☠️"
+
+# Search Settings
+SEARCH_MAX_RESULTS = 5
+SEARCH_TIMEOUT = 10
+SEARCH_COVER_SIZE = "-M.jpg"
 
 
-@dataclass(frozen=True)
-class EmbedConfig:
-    color: int = 0x00b4d8
-    error_color: int = 0xFF0000
-    max_description_length: int = 200
-    archive_link: str = "https://shadowlibraries.github.io/DirectDownloads/AnnasArchive/"
-    emoji_author: str = "👤"
-    emoji_rating: str = "⭐"
-    emoji_year: str = "📅"
-    emoji_link: str = "🔗"
-    emoji_archive: str = "🏴‍☠️"
+# Legacy compatibility - config objects that mimic old dataclass structure
+class _ConfigNamespace:
+    """Simple namespace for legacy compatibility."""
+    def __init__(self, **kwargs):
+        for k, v in kwargs.items():
+            setattr(self, k.lower(), v)
 
-@dataclass(frozen=True)
-class SearchConfig:
-    max_results: int = 5
-    timeout: int = 10
-    cover_size: str = "-M.jpg"
 
-# Global configuration instances
-DISCORD = DiscordConfig(
-    token=os.getenv('DISCORD_TOKEN', ''),
-    restrict_dm_to_guild_members=_parse_bool(
-        os.getenv('RESTRICT_DM_TO_GUILD_MEMBERS', 'false')
-    )
+# Backwards compatibility exports
+DISCORD = _ConfigNamespace(
+    token=DISCORD_TOKEN,
+    restrict_dm_to_guild_members=DISCORD_RESTRICT_DM
 )
 
-OPEN_LIBRARY = OpenLibraryConfig()
+OPEN_LIBRARY = _ConfigNamespace(
+    base_url=OPEN_LIBRARY_BASE_URL,
+    search_endpoint=OPEN_LIBRARY_SEARCH_ENDPOINT,
+    works_endpoint=OPEN_LIBRARY_WORKS_ENDPOINT,
+    books_endpoint=OPEN_LIBRARY_BOOKS_ENDPOINT,
+    covers_url=OPEN_LIBRARY_COVERS_URL
+)
 
-RATE_LIMIT = RateLimitConfig()
+RATE_LIMIT = _ConfigNamespace(
+    request_delay=RATE_LIMIT_REQUEST_DELAY,
+    max_retries=RATE_LIMIT_MAX_RETRIES,
+    retry_delay=RATE_LIMIT_RETRY_DELAY
+)
 
-EMBED = EmbedConfig()
+EMBED = _ConfigNamespace(
+    color=EMBED_COLOR,
+    error_color=EMBED_ERROR_COLOR,
+    max_description_length=EMBED_MAX_DESCRIPTION_LENGTH,
+    archive_link=EMBED_ARCHIVE_LINK,
+    emoji_author=EMBED_EMOJI_AUTHOR,
+    emoji_rating=EMBED_EMOJI_RATING,
+    emoji_year=EMBED_EMOJI_YEAR,
+    emoji_link=EMBED_EMOJI_LINK,
+    emoji_archive=EMBED_EMOJI_ARCHIVE
+)
 
-SEARCH = SearchConfig()
+SEARCH = _ConfigNamespace(
+    max_results=SEARCH_MAX_RESULTS,
+    timeout=SEARCH_TIMEOUT,
+    cover_size=SEARCH_COVER_SIZE
+)

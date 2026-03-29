@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from typing import Optional
 import discord
@@ -8,6 +7,7 @@ from src.clients.open_library import (
     search_books,
     fetch_and_convert_book_data,
     build_search_query,
+    APIError,
 )
 from src.embed_service import (
     create_book_embed,
@@ -41,17 +41,22 @@ async def _handle_book_command(
     try:
         # Rate limit before API call
         await interaction.client.rate_limiter.acquire()
-        result = await asyncio.to_thread(search_books, session, query, limit=SEARCH.max_results)
+        result = await search_books(session, query, limit=SEARCH.max_results)
         
         if result and result.get('books'):
             # Rate limit before API call
             await interaction.client.rate_limiter.acquire()
-            book_info = await asyncio.to_thread(fetch_and_convert_book_data, session, result['books'][0])
+            book_info = await fetch_and_convert_book_data(session, result['books'][0])
         else:
             book_info = None
-    except (OSError, ValueError, TypeError, RuntimeError) as e:
-        logger.error(f"[/book] search_failed error={type(e).__name__}: {e}")
-        embed = create_error_embed("Search failed. Please try again.")
+    except APIError as e:
+        logger.error(f"[/book] API error: {e}")
+        embed = create_error_embed("Open Library API is unavailable. Please try again later.")
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        return
+    except Exception as e:
+        logger.error(f"[/book] Unexpected error: {type(e).__name__}: {e}")
+        embed = create_error_embed("Search failed due to an unexpected error.")
         await interaction.followup.send(embed=embed, ephemeral=True)
         return
     

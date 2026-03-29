@@ -1,9 +1,9 @@
+import asyncio
 import logging
-import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
 from urllib.parse import quote
-import requests
+import aiohttp
 
 from config import OPEN_LIBRARY, RATE_LIMIT, SEARCH
 
@@ -21,6 +21,16 @@ _SEARCH_FIELDS = [
 logger = logging.getLogger(__name__)
 
 
+class APIError(Exception):
+    """Raised when API request fails after retries."""
+    pass
+
+
+class BookNotFoundError(Exception):
+    """Raised when no book is found for the given query."""
+    pass
+
+
 @dataclass(frozen=True)
 class BookData:
     title: str
@@ -36,8 +46,8 @@ class BookData:
     edition_count: int
 
 
-def _make_request_with_retry(
-    session: requests.Session,
+async def _make_request_with_retry(
+    session: aiohttp.ClientSession,
     url: str,
     params: Optional[Dict] = None,
     max_retries: int = RATE_LIMIT.max_retries,
@@ -46,23 +56,23 @@ def _make_request_with_retry(
     """Make HTTP request with exponential backoff retry."""
     for attempt in range(max_retries):
         try:
-            response = session.get(url, params=params, timeout=timeout)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+                response.raise_for_status()
+                return await response.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             if attempt == max_retries - 1:
                 logger.error(f"Request failed after {max_retries} attempts: {e}")
                 return None
             
             wait_time = RATE_LIMIT.retry_delay * (2 ** attempt)
             logger.warning(f"Request failed (attempt {attempt + 1}), retrying in {wait_time}s: {e}")
-            time.sleep(wait_time)
+            await asyncio.sleep(wait_time)
     
     return None
 
 
-def search_books(
-    session: requests.Session,
+async def search_books(
+    session: aiohttp.ClientSession,
     query: str,
     limit: int = SEARCH.max_results,
     language: Optional[str] = None
@@ -79,7 +89,7 @@ def search_books(
     if language:
         params['language'] = language
     
-    data = _make_request_with_retry(session, url, params)
+    data = await _make_request_with_retry(session, url, params)
     if data is None:
         return None
     
@@ -98,40 +108,34 @@ def search_books(
     return result
 
 
-def get_book_details(
-    session: requests.Session,
+async def get_book_details(
+    session: aiohttp.ClientSession,
     work_key: str
 ) -> Optional[Dict]:
     logger.info(f"Getting book details for work: {work_key}")
     
-    # Remove '/works/' prefix (7 characters) from work key
     if work_key.startswith('/works/'):
-        work_key = work_key[len('/works/'):]
+        work_key = work_key.removeprefix('/works/')
     
     url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.works_endpoint}/{work_key}.json"
-    return _make_request_with_retry(session, url)
+    return await _make_request_with_retry(session, url)
 
 
-def get_edition_details(
-    session: requests.Session,
+async def get_edition_details(
+    session: aiohttp.ClientSession,
     edition_key: str
 ) -> Optional[Dict]:
     logger.info(f"Getting edition details for: {edition_key}")
     
-    # Remove '/books/' prefix (7 characters) from edition key
     if edition_key.startswith('/books/'):
-        edition_key = edition_key[len('/books/'):]
+        edition_key = edition_key.removeprefix('/books/')
     
     url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.books_endpoint}/{edition_key}.json"
-    return _make_request_with_retry(session, url)
+    return await _make_request_with_retry(session, url)
 
 
 def _extract_description(data: Dict) -> str:
-    """Extract description from work details or search result data.
-    
-    Handles both full work details and search result data since they share
-    the same field structure for description and first_sentence.
-    """
+    """Extract description from work details or search result data."""
     desc = data.get('description')
     if isinstance(desc, dict):
         desc = desc.get('value', '')
@@ -155,22 +159,22 @@ def _extract_description(data: Dict) -> str:
     return ""
 
 
-def fetch_description(
-    session: requests.Session,
+async def fetch_description(
+    session: aiohttp.ClientSession,
     work_key: Optional[str]
-) -> Optional[str]:
-    """Fetch book description. Returns None on error, empty string if no description."""
+) -> str:
+    """Fetch book description. Returns empty string on error or if no description."""
     if not work_key:
-        return None
+        return ""
     
     try:
-        details = get_book_details(session, work_key)
+        details = await get_book_details(session, work_key)
         if details is None:
-            return None
-        return _extract_description(details) or None
-    except requests.RequestException as e:
+            return ""
+        return _extract_description(details)
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
         logger.warning(f"Failed to fetch description for {work_key}: {e}")
-        return None
+        return ""
 
 
 def _get_cover_url(ol_book: Dict) -> str:
@@ -180,7 +184,6 @@ def _get_cover_url(ol_book: Dict) -> str:
     
     isbns = ol_book.get('isbn', [])
     if isinstance(isbns, list) and isbns and isinstance(isbns[0], str):
-        # Use translate for single-pass character removal
         isbn = isbns[0].translate(str.maketrans('', '', '- '))
         return f"{OPEN_LIBRARY.covers_url}/b/isbn/{isbn}{SEARCH.cover_size}"
     
@@ -188,9 +191,8 @@ def _get_cover_url(ol_book: Dict) -> str:
 
 
 def _build_goodreads_link(title: Optional[str], author: Optional[str]) -> str:
-    """Build Goodreads search URL. Uses + for spaces as Goodreads expects."""
+    """Build Goodreads search URL."""
     def encode_query(text: str) -> str:
-        # Goodreads prefers + for spaces, %20 works but + is more standard
         return quote(text, safe='').replace('%20', '+')
     
     if title and author:
@@ -202,14 +204,11 @@ def _build_goodreads_link(title: Optional[str], author: Optional[str]) -> str:
     return "https://www.goodreads.com"
 
 
-def fetch_and_convert_book_data(
-    session: requests.Session,
+async def fetch_and_convert_book_data(
+    session: aiohttp.ClientSession,
     ol_book: Dict
 ) -> BookData:
-    """Convert Open Library search result to BookData.
-    
-    Uses description from search results if available, otherwise fetches details.
-    """
+    """Convert Open Library search result to BookData."""
     authors = ol_book.get('author_name', [])
     author = ', '.join(authors) if authors else "Unknown Author"
     
@@ -219,10 +218,9 @@ def fetch_and_convert_book_data(
     
     cover_url = _get_cover_url(ol_book)
     
-    # Try description from search results first, then fetch details if needed
     description = _extract_description(ol_book)
     if not description:
-        fetched = fetch_description(session, ol_book.get('key'))
+        fetched = await fetch_description(session, ol_book.get('key'))
         description = fetched or "No description available."
     
     title = ol_book.get('title', 'Unknown Title')
@@ -242,12 +240,12 @@ def fetch_and_convert_book_data(
     )
 
 
-def create_session() -> requests.Session:
-    session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Discord-Book-Bot/1.0 (https://github.com/adaland-com/discord-book-bot)'
-    })
-    return session
+def create_session() -> aiohttp.ClientSession:
+    return aiohttp.ClientSession(
+        headers={
+            'User-Agent': 'Discord-Book-Bot/1.0 (https://github.com/adaland-com/discord-book-bot)'
+        }
+    )
 
 
 def build_search_query(title: Optional[str], author: Optional[str]) -> str:
@@ -257,3 +255,4 @@ def build_search_query(title: Optional[str], author: Optional[str]) -> str:
     if author:
         parts.append(f'author:"{author}"')
     return ' '.join(parts)
+

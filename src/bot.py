@@ -36,7 +36,6 @@ class RateLimiter:
             delay = max(0, self._request_delay - time_since_last)
             
             if delay > 0:
-                logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
                 await asyncio.sleep(delay)
             
             self._last_request_time = time.monotonic()
@@ -52,10 +51,12 @@ class BookBot(commands.Bot):
             help_command=None
         )
         
-        self.session = create_session()
+        self.session = None
         self.rate_limiter = RateLimiter(RATE_LIMIT.request_delay)
     
     async def setup_hook(self):
+        self.session = create_session()
+        
         self.tree.add_command(create_book_command())
         self.tree.add_command(create_help_command())
         
@@ -70,10 +71,8 @@ class BookBot(commands.Bot):
     async def close(self):
         """Clean up resources on shutdown."""
         logger.info("Closing bot session...")
-        try:
-            self.session.close()
-        except (IOError, AttributeError) as e:
-            logger.warning(f"Error closing session: {e}")
+        if self.session:
+            await self.session.close()
         await super().close()
 
 
