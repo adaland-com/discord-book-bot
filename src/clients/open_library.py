@@ -7,6 +7,11 @@ import requests
 
 from config import OPEN_LIBRARY, RATE_LIMIT, SEARCH
 
+# Module-level constants
+_MIN_DESC_LENGTH = 10
+_MIN_SENTENCE_LENGTH = 5
+_COVER_SIZE_SUFFIX = SEARCH.cover_size
+
 logger = logging.getLogger(__name__)
 
 
@@ -150,9 +155,6 @@ def _extract_description(work_details: Optional[Dict]) -> str:
     if isinstance(desc, dict):
         desc = desc.get('value', '')
     
-    _MIN_DESC_LENGTH = 10
-    _MIN_SENTENCE_LENGTH = 5
-    
     if desc and len(str(desc).strip()) > _MIN_DESC_LENGTH:
         return str(desc).strip()
     
@@ -182,8 +184,6 @@ def fetch_description(
 
 def _get_cover_url(ol_book: Dict, session: requests.Session) -> str:
     cover_id = ol_book.get('cover_i')
-    # Cover image size suffix - M = medium (configurable via SEARCH config)
-    _COVER_SIZE_SUFFIX = SEARCH.cover_size
     if cover_id:
         return f"https://covers.openlibrary.org/b/id/{cover_id}{_COVER_SIZE_SUFFIX}"
     

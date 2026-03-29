@@ -10,7 +10,6 @@ load_dotenv()
 class DiscordConfig:
     """Discord bot configuration (immutable)."""
     token: str
-    prefix: str = "!"
     restrict_dm_to_guild_members: bool = False
 
 @dataclass(frozen=True)
@@ -48,7 +47,6 @@ class SearchConfig:
 # Global configuration instances
 DISCORD = DiscordConfig(
     token=os.getenv('DISCORD_TOKEN', ''),
-    prefix=os.getenv('BOT_PREFIX', '!'),
     restrict_dm_to_guild_members=os.getenv(
         'RESTRICT_DM_TO_GUILD_MEMBERS', 'false'
     ).lower() == 'true'

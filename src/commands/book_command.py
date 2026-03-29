@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Optional
 import discord
 from discord import app_commands
@@ -11,6 +12,8 @@ from src.services.embed_service import (
 )
 from src.services.logging_service import log_usage
 from config import EMBED
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -45,7 +48,13 @@ class BookCommandHandler:
         )
         
         session = interaction.client.session
-        book_info = await asyncio.to_thread(search_open_library, session, title, author)
+        try:
+            book_info = await asyncio.to_thread(search_open_library, session, title, author)
+        except Exception as e:
+            logger.error(f"Search failed: {e}")
+            embed = create_error_embed("Search failed. Please try again.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
         
         if book_info is None:
             message = create_no_results_message(title, author)

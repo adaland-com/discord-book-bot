@@ -59,10 +59,11 @@ def create_help_embed() -> discord.Embed:
     )
     embed.description = (
         "Use `/book` to search for books anywhere on Discord!\n\n"
-        "**Commands:**\n"
-        "• `/book title: <title>` - search by title\n"
-        "• `/book author: <author>` - search by author\n"
-        "• `/book title: <title> author: <author>` - exact search\n\n"
+        "**How to search:**\n"
+        "1. Type `/book`\n"
+        "2. Fill in the \"title\" field for title search\n"
+        "3. Fill in the \"author\" field for author search\n"
+        "4. Fill both for exact matching\n\n"
         "**Works in:** Servers, DMs, and Group DMs\n\n"
         "Add the app to your account to use it anywhere."
     )

@@ -1,6 +1,8 @@
 from typing import Optional
 import requests
 
+from config import SEARCH
+
 from src.clients.open_library import (
     search_books,
     convert_to_book_data,
@@ -25,7 +27,7 @@ def search_open_library(
     if not query:
         return None
     
-    result = search_books(session, query, limit=5)
+    result = search_books(session, query, limit=SEARCH.max_results)
     
     if result and result.get('books'):
         ol_book = result['books'][0]
