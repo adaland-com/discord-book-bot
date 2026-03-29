@@ -23,8 +23,8 @@ def create_help_command() -> app_commands.Command:
         users=True
     )
     async def help_command(interaction: discord.Interaction):
-        location = "DM" if interaction.guild is None else f"Server: {interaction.guild.name}"
-        logger.info(f"{interaction.user.name} used /help | Location: {location}")
+        location = "DM" if interaction.guild is None else f"guild={interaction.guild.name}"
+        logger.info(f"[/help] user={interaction.user.name} {location}")
         
         embed = create_help_embed()
         await interaction.response.send_message(embed=embed)

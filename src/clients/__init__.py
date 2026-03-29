@@ -5,7 +5,7 @@ from src.clients.open_library import (
     get_book_details,
     get_edition_details,
     fetch_description,
-    convert_to_book_data,
+    fetch_and_convert_book_data,
     create_session,
 )
 
@@ -15,6 +15,6 @@ __all__ = [
     'get_book_details',
     'get_edition_details',
     'fetch_description',
-    'convert_to_book_data',
+    'fetch_and_convert_book_data',
     'create_session',
 ]

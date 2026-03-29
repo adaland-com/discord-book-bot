@@ -4,13 +4,18 @@ from typing import Optional
 import discord
 from discord import app_commands
 
-from src.services.book_service import search_open_library, validate_search_params
+from src.clients.open_library import (
+    search_books,
+    fetch_and_convert_book_data,
+    BookData,
+    build_search_query,
+)
 from src.services.embed_service import (
     create_book_embed,
     create_no_results_message,
     create_error_embed,
 )
-from config import EMBED
+from config import EMBED, SEARCH
 
 logger = logging.getLogger(__name__)
 
@@ -26,27 +31,33 @@ class BookCommandHandler:
     ) -> None:
         await interaction.response.defer()
         
-        is_valid, error = validate_search_params(title, author)
-        if not is_valid:
-            embed = create_error_embed(error)
+        # Validate search params
+        if not title and not author:
+            embed = create_error_embed("Please provide at least a title or an author!")
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
         
         query_parts = []
         if title:
-            query_parts.append(f"title: {title}")
+            query_parts.append(f"title={title}")
         if author:
-            query_parts.append(f"author: {author}")
-        query_str = " | ".join(query_parts)
+            query_parts.append(f"author={author}")
+        query_str = "&".join(query_parts)
         
-        location = "DM" if interaction.guild is None else f"Server: {interaction.guild.name}"
-        logger.info(f"{interaction.user.name} used /book | Query: '{query_str}' | Location: {location}")
+        location = "DM" if interaction.guild is None else f"guild={interaction.guild.name}"
+        logger.info(f"[/book] user={interaction.user.name} query='{query_str}' {location}")
         
         session = interaction.client.session
         try:
-            book_info = await asyncio.to_thread(search_open_library, session, title, author)
+            query = build_search_query(title, author)
+            result = search_books(session, query, limit=SEARCH.max_results)
+            
+            if result and result.get('books'):
+                book_info = fetch_and_convert_book_data(session, result['books'][0])
+            else:
+                book_info = None
         except Exception as e:
-            logger.error(f"Search failed: {e}")
+            logger.error(f"[/book] search_failed error={e}")
             embed = create_error_embed("Search failed. Please try again.")
             await interaction.followup.send(embed=embed, ephemeral=True)
             return

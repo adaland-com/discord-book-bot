@@ -201,10 +201,14 @@ def _build_goodreads_link(title: Optional[str], author: Optional[str]) -> str:
     return "https://www.goodreads.com"
 
 
-def convert_to_book_data(
+def fetch_and_convert_book_data(
     session: requests.Session,
     ol_book: Dict
 ) -> BookData:
+    """Fetch additional book data (description) and convert to BookData.
+    
+    Note: This function makes an HTTP request to fetch the book description.
+    """
     authors = ol_book.get('author_name', [])
     author = ', '.join(authors) if authors else "Unknown Author"
     
