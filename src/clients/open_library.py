@@ -132,12 +132,7 @@ def _extract_description(data: Dict) -> str:
     if first_sentence and len(str(first_sentence).strip()) > _MIN_SENTENCE_LENGTH:
         return f"First sentence: {str(first_sentence).strip()}"
     
-    return "No description available."
-
-
-def _extract_description_from_search(ol_book: Dict) -> str:
-    """Extract description from search result data without HTTP call."""
-    return _extract_description(ol_book)
+    return ""
 
 
 def fetch_description(
@@ -152,9 +147,7 @@ def fetch_description(
         details = get_book_details(session, work_key)
         if details is None:
             return None
-        desc = _extract_description(details)
-        # Return empty string for "no description" cases, None for errors
-        return "" if desc == "No description available." else desc
+        return _extract_description(details) or None
     except requests.RequestException as e:
         logger.warning(f"Failed to fetch description for {work_key}: {e}")
         return None
@@ -201,14 +194,11 @@ def fetch_and_convert_book_data(
     
     cover_url = _get_cover_url(ol_book)
     
-    # Use description from search results if available, skip HTTP call
-    raw_description = _extract_description_from_search(ol_book)
-    if raw_description and raw_description != "No description available.":
-        description = raw_description
-    else:
-        # Fall back to fetching details via HTTP
+    # Try description from search results first, then fetch details if needed
+    description = _extract_description(ol_book)
+    if not description:
         fetched = fetch_description(session, ol_book.get('key'))
-        description = fetched if fetched is not None else "No description available."
+        description = fetched or "No description available."
     
     title = ol_book.get('title', 'Unknown Title')
     

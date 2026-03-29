@@ -3,7 +3,6 @@ import logging
 from typing import Optional
 import discord
 from discord import app_commands
-import requests
 
 from src.clients.open_library import (
     search_books,
@@ -33,20 +32,13 @@ async def _handle_book_command(
         await interaction.followup.send(embed=embed, ephemeral=True)
         return
     
-    query_parts = []
-    if title:
-        query_parts.append(f"title={title}")
-    if author:
-        query_parts.append(f"author={author}")
-    query_str = "&".join(query_parts)
+    query = build_search_query(title, author)
     
     location = "DM" if interaction.guild is None else f"guild={interaction.guild.name}"
-    logger.info(f"[/book] user={interaction.user.name} query='{query_str}' {location}")
+    logger.info(f"[/book] user={interaction.user.name} query='{query}' {location}")
     
     session = interaction.client.session
     try:
-        query = build_search_query(title, author)
-        
         # Rate limit before API call
         await interaction.client.rate_limiter.acquire()
         result = await asyncio.to_thread(search_books, session, query, limit=SEARCH.max_results)
@@ -57,7 +49,7 @@ async def _handle_book_command(
             book_info = await asyncio.to_thread(fetch_and_convert_book_data, session, result['books'][0])
         else:
             book_info = None
-    except requests.RequestException as e:
+    except Exception as e:
         logger.error(f"[/book] search_failed error={type(e).__name__}: {e}")
         embed = create_error_embed("Search failed. Please try again.")
         await interaction.followup.send(embed=embed, ephemeral=True)

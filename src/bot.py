@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -30,7 +31,7 @@ class RateLimiter:
     async def acquire(self):
         """Acquire rate limit, sleeping if necessary."""
         async with self._lock:
-            current_time = asyncio.get_event_loop().time()
+            current_time = time.monotonic()
             time_since_last = current_time - self._last_request_time
             delay = max(0, self._request_delay - time_since_last)
             
@@ -38,7 +39,7 @@ class RateLimiter:
                 logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
                 await asyncio.sleep(delay)
             
-            self._last_request_time = asyncio.get_event_loop().time()
+            self._last_request_time = time.monotonic()
 
 
 class BookBot(commands.Bot):
@@ -65,6 +66,12 @@ class BookBot(commands.Bot):
     async def on_ready(self):
         logger.info(f"Logged in as {self.user}!")
         logger.info("Bot ready for DMs and servers with slash commands.")
+    
+    async def close(self):
+        """Clean up resources on shutdown."""
+        logger.info("Closing bot session...")
+        self.session.close()
+        await super().close()
 
 
 def main():

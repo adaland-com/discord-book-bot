@@ -6,6 +6,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _parse_bool(value: str) -> bool:
+    """Parse a string value as boolean."""
+    return value.lower() in ('true', '1', 'yes', 'on')
+
+
 @dataclass(frozen=True)
 class DiscordConfig:
     token: str
@@ -47,9 +52,9 @@ class SearchConfig:
 # Global configuration instances
 DISCORD = DiscordConfig(
     token=os.getenv('DISCORD_TOKEN', ''),
-    restrict_dm_to_guild_members=os.getenv(
-        'RESTRICT_DM_TO_GUILD_MEMBERS', 'false'
-    ).lower() == 'true'
+    restrict_dm_to_guild_members=_parse_bool(
+        os.getenv('RESTRICT_DM_TO_GUILD_MEMBERS', 'false')
+    )
 )
 
 OPEN_LIBRARY = OpenLibraryConfig()
