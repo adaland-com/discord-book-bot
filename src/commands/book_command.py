@@ -7,7 +7,6 @@ from discord import app_commands
 from src.clients.open_library import (
     search_books,
     fetch_and_convert_book_data,
-    BookData,
     build_search_query,
 )
 from src.embed_service import (
@@ -66,7 +65,7 @@ async def _handle_book_command(
     embed = create_book_embed(book_info)
     
     embed.add_field(
-        name="🏴‍☠️ Anna's Archive",
+        name=f"{EMBED.emoji_archive} Anna's Archive",
         value=EMBED.archive_link,
         inline=False
     )
