@@ -8,13 +8,11 @@ load_dotenv()
 
 @dataclass(frozen=True)
 class DiscordConfig:
-    """Discord bot configuration (immutable)."""
     token: str
     restrict_dm_to_guild_members: bool = False
 
 @dataclass(frozen=True)
 class OpenLibraryConfig:
-    """Open Library API configuration (immutable)."""
     base_url: str = "https://openlibrary.org"
     search_endpoint: str = "/search.json"
     works_endpoint: str = "/works"
@@ -23,7 +21,6 @@ class OpenLibraryConfig:
 
 @dataclass(frozen=True)
 class RateLimitConfig:
-    """Rate limiting configuration (immutable)."""
     request_delay: float = 1.0
     max_retries: int = 3
     retry_delay: float = 2.0
@@ -31,7 +28,6 @@ class RateLimitConfig:
 
 @dataclass(frozen=True)
 class EmbedConfig:
-    """Discord embed configuration (immutable)."""
     color: int = 0x00b4d8
     error_color: int = 0xFF0000
     max_description_length: int = 200
@@ -39,7 +35,6 @@ class EmbedConfig:
 
 @dataclass(frozen=True)
 class SearchConfig:
-    """Search configuration (immutable)."""
     max_results: int = 5
     timeout: int = 10
     cover_size: str = "-M.jpg"

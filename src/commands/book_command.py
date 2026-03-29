@@ -10,7 +10,6 @@ from src.services.embed_service import (
     create_no_results_message,
     create_error_embed,
 )
-from src.services.logging_service import log_usage
 from config import EMBED
 
 logger = logging.getLogger(__name__)
@@ -40,12 +39,8 @@ class BookCommandHandler:
             query_parts.append(f"author: {author}")
         query_str = " | ".join(query_parts)
         
-        log_usage(
-            interaction.user.name,
-            "/book",
-            query_str,
-            "DM" if interaction.guild is None else f"Server: {interaction.guild.name}"
-        )
+        location = "DM" if interaction.guild is None else f"Server: {interaction.guild.name}"
+        logger.info(f"{interaction.user.name} used /book | Query: '{query_str}' | Location: {location}")
         
         session = interaction.client.session
         try:

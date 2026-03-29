@@ -1,4 +1,5 @@
 from typing import Optional
+import logging
 import requests
 
 from config import SEARCH
@@ -7,11 +8,10 @@ from src.clients.open_library import (
     search_books,
     convert_to_book_data,
     BookData,
-)
-from src.parsers.book_parser import (
     build_search_query,
 )
-from src.services.logging_service import log_search_attempt
+
+logger = logging.getLogger(__name__)
 
 
 def search_open_library(
@@ -19,8 +19,13 @@ def search_open_library(
     title: Optional[str] = None,
     author: Optional[str] = None
 ) -> Optional[BookData]:
-
-    log_search_attempt("Open Library", title, author)
+    query_parts = []
+    if title:
+        query_parts.append(f"title: {title}")
+    if author:
+        query_parts.append(f"author: {author}")
+    query_str = " | ".join(query_parts) if query_parts else "empty query"
+    logger.info(f"[Open Library] Searching: {query_str}")
     
     query = build_search_query(title, author)
     

@@ -8,11 +8,6 @@ from src.services.embed_service import (
     create_no_results_message,
     create_error_embed,
 )
-from src.services.logging_service import (
-    log_usage,
-    log_search_attempt,
-    format_log_message,
-)
 
 __all__ = [
     'search_open_library',
@@ -21,7 +16,4 @@ __all__ = [
     'create_help_embed',
     'create_no_results_message',
     'create_error_embed',
-    'log_usage',
-    'log_search_attempt',
-    'format_log_message',
 ]

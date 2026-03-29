@@ -1,4 +1,5 @@
 import logging
+import threading
 import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
@@ -28,9 +29,6 @@ class BookData:
     goodreads_url: str
     language: List[str]
     edition_count: int
-
-
-import threading
 
 
 _rate_limit_lock = threading.Lock()
@@ -182,7 +180,7 @@ def fetch_description(
         return "No description available."
 
 
-def _get_cover_url(ol_book: Dict, session: requests.Session) -> str:
+def _get_cover_url(ol_book: Dict) -> str:
     cover_id = ol_book.get('cover_i')
     if cover_id:
         return f"https://covers.openlibrary.org/b/id/{cover_id}{_COVER_SIZE_SUFFIX}"
@@ -214,7 +212,7 @@ def convert_to_book_data(
     if rating is not None:
         rating = float(rating)
     
-    cover_url = _get_cover_url(ol_book, session)
+    cover_url = _get_cover_url(ol_book)
     description = fetch_description(session, ol_book.get('key'))
     
     title = ol_book.get('title', 'Unknown Title')
@@ -240,3 +238,12 @@ def create_session() -> requests.Session:
         'User-Agent': 'Discord-Book-Bot/1.0 (https://github.com/your-repo)'
     })
     return session
+
+
+def build_search_query(title: Optional[str], author: Optional[str]) -> str:
+    parts = []
+    if title:
+        parts.append(f'title:"{title}"')
+    if author:
+        parts.append(f'author:"{author}"')
+    return ' '.join(parts)
