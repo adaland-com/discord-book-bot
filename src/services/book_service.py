@@ -34,14 +34,6 @@ def search_open_library(
     return None
 
 
-def search_book(
-    session: requests.Session,
-    title: Optional[str] = None,
-    author: Optional[str] = None
-) -> Optional[BookData]:
-    return search_open_library(session, title, author)
-
-
 def validate_search_params(
     title: Optional[str],
     author: Optional[str]

@@ -1,5 +1,4 @@
 from src.services.book_service import (
-    search_book,
     search_open_library,
     validate_search_params,
 )
@@ -16,7 +15,6 @@ from src.services.logging_service import (
 )
 
 __all__ = [
-    'search_book',
     'search_open_library',
     'validate_search_params',
     'create_book_embed',

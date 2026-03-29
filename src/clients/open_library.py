@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from urllib.parse import quote
 import requests
 
-from config import OPEN_LIBRARY, RATE_LIMIT
+from config import OPEN_LIBRARY, RATE_LIMIT, SEARCH
 
 logger = logging.getLogger(__name__)
 
@@ -36,20 +36,29 @@ def _rate_limited_request(
     session: requests.Session,
     url: str,
     params: Optional[Dict] = None,
-    timeout: int = 10
+    timeout: int = SEARCH.timeout
 ) -> requests.Response:
     global _last_request_time
+    
+    # Calculate delay needed (with lock)
     with _rate_limit_lock:
         current_time = time.time()
         time_since_last = current_time - _last_request_time
-        if time_since_last < RATE_LIMIT.request_delay:
-            delay = RATE_LIMIT.request_delay - time_since_last
-            logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
-            time.sleep(delay)
-        
-        response = session.get(url, params=params, timeout=timeout)
+        delay = max(0, RATE_LIMIT.request_delay - time_since_last)
+    
+    # Sleep outside the lock so other threads can proceed
+    if delay > 0:
+        logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
+        time.sleep(delay)
+    
+    # Make request without holding lock
+    response = session.get(url, params=params, timeout=timeout)
+    
+    # Update timestamp (with lock)
+    with _rate_limit_lock:
         _last_request_time = time.time()
-        return response
+    
+    return response
 
 
 def _make_request_with_retry(
@@ -78,7 +87,7 @@ def _make_request_with_retry(
 def search_books(
     session: requests.Session,
     query: str,
-    limit: int = 10,
+    limit: int = SEARCH.max_results,
     language: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     logger.info(f"Searching Open Library for: '{query}' (limit={limit})")
@@ -111,8 +120,9 @@ def get_book_details(
 ) -> Optional[Dict]:
     logger.info(f"Getting book details for work: {work_key}")
     
+    # Remove '/works/' prefix (7 characters) from work key
     if work_key.startswith('/works/'):
-        work_key = work_key[7:]
+        work_key = work_key[len('/works/'):]
     
     url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.works_endpoint}/{work_key}.json"
     return _make_request_with_retry(session, url)
@@ -124,8 +134,9 @@ def get_edition_details(
 ) -> Optional[Dict]:
     logger.info(f"Getting edition details for: {edition_key}")
     
+    # Remove '/books/' prefix (7 characters) from edition key
     if edition_key.startswith('/books/'):
-        edition_key = edition_key[7:]
+        edition_key = edition_key[len('/books/'):]
     
     url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.books_endpoint}/{edition_key}.json"
     return _make_request_with_retry(session, url)
@@ -139,13 +150,16 @@ def _extract_description(work_details: Optional[Dict]) -> str:
     if isinstance(desc, dict):
         desc = desc.get('value', '')
     
-    if desc and len(str(desc).strip()) > 10:
+    _MIN_DESC_LENGTH = 10
+    _MIN_SENTENCE_LENGTH = 5
+    
+    if desc and len(str(desc).strip()) > _MIN_DESC_LENGTH:
         return str(desc).strip()
     
     first_sentence = work_details.get('first_sentence')
     if isinstance(first_sentence, dict):
         first_sentence = first_sentence.get('value', '')
-    if first_sentence and len(str(first_sentence).strip()) > 5:
+    if first_sentence and len(str(first_sentence).strip()) > _MIN_SENTENCE_LENGTH:
         return f"First sentence: {str(first_sentence).strip()}"
     
     return "No description available."
@@ -168,13 +182,15 @@ def fetch_description(
 
 def _get_cover_url(ol_book: Dict, session: requests.Session) -> str:
     cover_id = ol_book.get('cover_i')
+    # Cover image size suffix - M = medium (configurable via SEARCH config)
+    _COVER_SIZE_SUFFIX = SEARCH.cover_size
     if cover_id:
-        return f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
+        return f"https://covers.openlibrary.org/b/id/{cover_id}{_COVER_SIZE_SUFFIX}"
     
     isbns = ol_book.get('isbn', [])
     if isbns:
         isbn = isbns[0].replace("-", "").replace(" ", "")
-        return f"{OPEN_LIBRARY.covers_url}/b/isbn/{isbn}-M.jpg"
+        return f"{OPEN_LIBRARY.covers_url}/b/isbn/{isbn}{_COVER_SIZE_SUFFIX}"
     
     return ""
 

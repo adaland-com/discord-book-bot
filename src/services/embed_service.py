@@ -60,10 +60,11 @@ def create_help_embed() -> discord.Embed:
     embed.description = (
         "Use `/book` to search for books anywhere on Discord!\n\n"
         "**Commands:**\n"
-        "• `/book <title>` - search by title\n"
+        "• `/book title: <title>` - search by title\n"
+        "• `/book author: <author>` - search by author\n"
         "• `/book title: <title> author: <author>` - exact search\n\n"
-        "**Direct Messages:** Send a message without prefix to search.\n\n"
-        "Add the app to your account to use it in DMs with friends."
+        "**Works in:** Servers, DMs, and Group DMs\n\n"
+        "Add the app to your account to use it anywhere."
     )
     return embed
 
@@ -89,6 +90,6 @@ def create_error_embed(message: str) -> discord.Embed:
     embed = discord.Embed(
         title="Error",
         description=message,
-        color=0xFF0000
+        color=EMBED.error_color
     )
     return embed

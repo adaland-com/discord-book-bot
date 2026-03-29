@@ -15,6 +15,8 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
+logger = logging.getLogger(__name__)
+
 
 class BookBot(commands.Bot):
     
@@ -32,20 +34,20 @@ class BookBot(commands.Bot):
         self.tree.add_command(create_book_command())
         self.tree.add_command(create_help_command())
         
-        print("Syncing slash commands...")
+        logger.info("Syncing slash commands...")
         await self.tree.sync()
-        print("Slash commands synced!")
+        logger.info("Slash commands synced!")
     
     async def on_ready(self):
-        print(f"Logged in as {self.user}!")
-        print(f"Bot ready for DMs and servers with slash commands.")
+        logger.info(f"Logged in as {self.user}!")
+        logger.info("Bot ready for DMs and servers with slash commands.")
 
 
 def main():
     token = DISCORD.token
     
     if not token:
-        print("Error: No Discord token found. Please set DISCORD_TOKEN in .env")
+        logger.error("No Discord token found. Please set DISCORD_TOKEN in .env")
         return
     
     bot = BookBot()

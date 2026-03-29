@@ -34,6 +34,7 @@ class RateLimitConfig:
 class EmbedConfig:
     """Discord embed configuration (immutable)."""
     color: int = 0x00b4d8
+    error_color: int = 0xFF0000
     max_description_length: int = 200
     archive_link: str = "https://shadowlibraries.github.io/DirectDownloads/AnnasArchive/"
 
@@ -42,6 +43,7 @@ class SearchConfig:
     """Search configuration (immutable)."""
     max_results: int = 5
     timeout: int = 10
+    cover_size: str = "-M.jpg"
 
 # Global configuration instances
 DISCORD = DiscordConfig(

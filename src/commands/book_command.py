@@ -3,7 +3,7 @@ from typing import Optional
 import discord
 from discord import app_commands
 
-from src.services.book_service import search_book, validate_search_params
+from src.services.book_service import search_open_library, validate_search_params
 from src.services.embed_service import (
     create_book_embed,
     create_no_results_message,
@@ -45,7 +45,7 @@ class BookCommandHandler:
         )
         
         session = interaction.client.session
-        book_info = await asyncio.to_thread(search_book, session, title, author)
+        book_info = await asyncio.to_thread(search_open_library, session, title, author)
         
         if book_info is None:
             message = create_no_results_message(title, author)
