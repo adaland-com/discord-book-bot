@@ -1,6 +1,5 @@
-.venv**
-__pycache__/**
 test/__pycache__/**
 .vscode/launch.json
 venv/
 __pycache__/
+.env

@@ -23,14 +23,10 @@ def check_env_file():
         print("   Please copy .env.example to .env and add your Discord token")
         return False
     
-    # Check if TMP_DISCORD_TOKEN is set
     with open('.env', 'r') as f:
         content = f.read()
-        if 'TMP_DISCORD_TOKEN=your_discord_bot_token_here' in content:
+        if 'DISCORD_TOKEN =your_discord_bot_token_here' in content:
             print("❌ Discord token not set in .env file")
-            return False
-        elif 'TMP_DISCORD_TOKEN=' not in content:
-            print("❌ TMP_DISCORD_TOKEN not found in .env file")
             return False
     
     print("✅ .env file found and configured")

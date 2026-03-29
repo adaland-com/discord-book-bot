@@ -54,12 +54,7 @@ A Discord bot that searches for books using Open Library API and returns detaile
 
 2. Edit `.env` and add your Discord bot token:
    ```
-   TMP_DISCORD_TOKEN=your_discord_bot_token_here
-   ```
-
-3. (Optional) Add Google Books API key for fallback searches:
-   ```
-   GOOGLE_BOOKS_API_KEY=your_google_books_api_key_here
+   DISCORD_TOKEN =your_discord_bot_token_here
    ```
 
 ### Running the Bot
@@ -109,30 +104,11 @@ The bot requires the following permissions in your Discord server:
 - Send Messages
 - Embed Links
 
-## Project Structure
-
-```
-discord-book-bot/
-├── bot.py                 # Main bot file with Discord commands
-├── book_searcher.py       # Multi-source book search logic
-├── open_library_client.py # Open Library API client
-├── config.py             # Bot configuration
-├── requirements.txt       # Python dependencies
-├── .env                  # Environment variables (create this)
-├── .env.example          # Example environment file
-├── README.md            # This file
-├── run_bot.bat          # Windows batch file to run the bot
-├── run_tests.py         # Test runner
-├── tests/               # Test suite
-└── docs/                # Documentation and implementation notes
-```
-
 ## Dependencies
 
 - `discord.py` - Discord API wrapper
 - `requests` - HTTP requests for API calls
 - `beautifulsoup4` - Web scraping (legacy fallback)
-- `googlesearch-python` - Google search functionality (legacy fallback)
 - `python-dotenv` - Environment variable management
 
 ## Troubleshooting
@@ -149,31 +125,6 @@ discord-book-bot/
    - Check if the book exists on Open Library
    - Some books might not be available in Open Library's database
 
-3. **Polish book search issues**
-   - Open Library has excellent Polish literature coverage
-   - Try both Polish and English titles
-   - Polish characters are handled automatically
-
-## Testing
-
-```bash
-# Run all tests
-python run_tests.py
-
-# Or use pytest
-pytest
-
-# Run with verbose output
-pytest -v
-```
-
 ## License
 
 This project is open source and available under the MIT License.
-
-## Additional Documentation
-
-For implementation details, technical notes, and case studies, see the `docs/` folder:
-- `docs/implementation-notes.md` - Technical implementation details
-- `docs/polish-setup-guide.md` - Polish language setup guide
-- `docs/case-studies.md` - Bug fixes and solutions

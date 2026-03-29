@@ -2,7 +2,6 @@
 from config.settings import (
     DISCORD,
     OPEN_LIBRARY,
-    GOOGLE_BOOKS,
     RATE_LIMIT,
     CACHE,
     EMBED,
@@ -12,7 +11,6 @@ from config.settings import (
 __all__ = [
     'DISCORD',
     'OPEN_LIBRARY',
-    'GOOGLE_BOOKS',
     'RATE_LIMIT',
     'CACHE',
     'EMBED',
