@@ -95,7 +95,7 @@ The bot will respond with a rich embed containing:
 - Publication year (if available)
 - Book description
 - Cover image (if available)
-- Source information (Open Library, Google Books, etc.)
+- Source information (Open Library etc.)
 
 ## Bot Permissions
 
