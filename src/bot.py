@@ -1,3 +1,4 @@
+import logging
 import discord
 from discord.ext import commands
 from discord import app_commands
@@ -9,13 +10,18 @@ from src.commands import (
 )
 from src.clients.open_library import create_session
 
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 
 class BookBot(commands.Bot):
     
     def __init__(self):
         intents = discord.Intents.default()
         super().__init__(
-            command_prefix=DISCORD.prefix,
+            command_prefix="",
             intents=intents,
             help_command=None
         )
@@ -33,11 +39,6 @@ class BookBot(commands.Bot):
     async def on_ready(self):
         print(f"Logged in as {self.user}!")
         print(f"Bot ready for DMs and servers with slash commands.")
-    
-    async def on_message(self, message: discord.Message):
-        if message.author == self.user:
-            return
-        await self.process_commands(message)
 
 
 def main():

@@ -1,5 +1,8 @@
-import datetime
+import logging
 from typing import Optional
+
+
+logger = logging.getLogger(__name__)
 
 
 def format_log_message(
@@ -8,11 +11,9 @@ def format_log_message(
     query: Optional[str] = None,
     location: str = "Unknown"
 ) -> str:
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
     if query:
-        return f"[{timestamp}] {user_name} used {command} | Query: '{query}' | Location: {location}"
-    return f"[{timestamp}] {user_name} used {command} | Location: {location}"
+        return f"{user_name} used {command} | Query: '{query}' | Location: {location}"
+    return f"{user_name} used {command} | Location: {location}"
 
 
 def log_usage(
@@ -22,7 +23,7 @@ def log_usage(
     location: str = "Unknown"
 ) -> None:
     message = format_log_message(user_name, command, query, location)
-    print(message)
+    logger.info(message)
 
 
 def log_search_attempt(
@@ -37,4 +38,4 @@ def log_search_attempt(
         query_parts.append(f"author: {author}")
     
     query_str = " | ".join(query_parts) if query_parts else "empty query"
-    print(f"[{source}] Searching: {query_str}")
+    logger.info(f"[{source}] Searching: {query_str}")

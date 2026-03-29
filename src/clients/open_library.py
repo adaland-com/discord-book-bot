@@ -25,6 +25,10 @@ class BookData:
     edition_count: int
 
 
+import threading
+
+
+_rate_limit_lock = threading.Lock()
 _last_request_time: float = 0.0
 
 
@@ -35,16 +39,17 @@ def _rate_limited_request(
     timeout: int = 10
 ) -> requests.Response:
     global _last_request_time
-    current_time = time.time()
-    time_since_last = current_time - _last_request_time
-    if time_since_last < RATE_LIMIT.request_delay:
-        delay = RATE_LIMIT.request_delay - time_since_last
-        logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
-        time.sleep(delay)
-    
-    response = session.get(url, params=params, timeout=timeout)
-    _last_request_time = time.time()
-    return response
+    with _rate_limit_lock:
+        current_time = time.time()
+        time_since_last = current_time - _last_request_time
+        if time_since_last < RATE_LIMIT.request_delay:
+            delay = RATE_LIMIT.request_delay - time_since_last
+            logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
+            time.sleep(delay)
+        
+        response = session.get(url, params=params, timeout=timeout)
+        _last_request_time = time.time()
+        return response
 
 
 def _make_request_with_retry(

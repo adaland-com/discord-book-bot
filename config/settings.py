@@ -29,17 +29,13 @@ class RateLimitConfig:
     max_retries: int = 3
     retry_delay: float = 2.0
 
-@dataclass(frozen=True)
-class CacheConfig:
-    """Cache configuration (immutable)."""
-    ttl_seconds: int = 3600
-    enabled: bool = True
 
 @dataclass(frozen=True)
 class EmbedConfig:
     """Discord embed configuration (immutable)."""
     color: int = 0x00b4d8
     max_description_length: int = 200
+    archive_link: str = "https://shadowlibraries.github.io/DirectDownloads/AnnasArchive/"
 
 @dataclass(frozen=True)
 class SearchConfig:
@@ -59,11 +55,6 @@ DISCORD = DiscordConfig(
 OPEN_LIBRARY = OpenLibraryConfig()
 
 RATE_LIMIT = RateLimitConfig()
-
-CACHE = CacheConfig(
-    ttl_seconds=int(os.getenv('CACHE_TTL', '3600')),
-    enabled=os.getenv('ENABLE_CACHE', 'true').lower() == 'true'
-)
 
 EMBED = EmbedConfig()
 

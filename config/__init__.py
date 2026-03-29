@@ -3,7 +3,6 @@ from config.settings import (
     DISCORD,
     OPEN_LIBRARY,
     RATE_LIMIT,
-    CACHE,
     EMBED,
     SEARCH,
 )
@@ -12,7 +11,6 @@ __all__ = [
     'DISCORD',
     'OPEN_LIBRARY',
     'RATE_LIMIT',
-    'CACHE',
     'EMBED',
     'SEARCH',
 ]

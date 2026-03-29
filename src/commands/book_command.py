@@ -3,7 +3,6 @@ from typing import Optional
 import discord
 from discord import app_commands
 
-from src.parsers.book_parser import parse_query
 from src.services.book_service import search_book, validate_search_params
 from src.services.embed_service import (
     create_book_embed,
@@ -11,7 +10,8 @@ from src.services.embed_service import (
     create_error_embed,
 )
 from src.services.logging_service import log_usage
-import requests
+from config import EMBED
+
 
 
 class BookCommandHandler:
@@ -19,7 +19,6 @@ class BookCommandHandler:
     async def handle(
         self,
         interaction: discord.Interaction,
-        session: requests.Session,
         title: Optional[str] = None,
         author: Optional[str] = None
     ) -> None:
@@ -45,6 +44,7 @@ class BookCommandHandler:
             "DM" if interaction.guild is None else f"Server: {interaction.guild.name}"
         )
         
+        session = interaction.client.session
         book_info = await asyncio.to_thread(search_book, session, title, author)
         
         if book_info is None:
@@ -56,7 +56,7 @@ class BookCommandHandler:
         
         embed.add_field(
             name="🏴‍☠️ Anna's Archive",
-            value="https://shadowlibraries.github.io/DirectDownloads/AnnasArchive/",
+            value=EMBED.archive_link,
             inline=False
         )
         
@@ -88,7 +88,6 @@ def create_book_command() -> app_commands.Command:
         title: Optional[str] = None,
         author: Optional[str] = None
     ):
-        session = interaction.client.session
-        await handler.handle(interaction, session, title, author)
+        await handler.handle(interaction, title, author)
     
     return book_command

@@ -1,51 +1,51 @@
-from typing import Dict, Any, Optional
+from typing import Optional
 import discord
 from config import EMBED
+from src.clients.open_library import BookData
 
 
-def create_book_embed(book_info: Dict[str, Any]) -> discord.Embed:
+def create_book_embed(book_info: BookData) -> discord.Embed:
     embed = discord.Embed(
-        title=book_info.get('title', 'Unknown Title'),
-        url=book_info.get('url'),
+        title=book_info.title or 'Unknown Title',
+        url=book_info.url,
         color=EMBED.color
     )
     
-    if book_info.get('author'):
+    if book_info.author:
         embed.add_field(
             name="👤 Author",
-            value=book_info['author'],
+            value=book_info.author,
             inline=False
         )
     
-    if book_info.get('rating'):
+    if book_info.rating:
         embed.add_field(
             name="⭐ Rating",
-            value=f"{book_info['rating']}/5.0",
+            value=f"{book_info.rating}/5.0",
             inline=True
         )
     
-    if book_info.get('publication_year'):
+    if book_info.publication_year:
         embed.add_field(
             name="📅 Year",
-            value=str(book_info['publication_year']),
+            value=str(book_info.publication_year),
             inline=True
         )
     
-    desc = book_info.get('description', "No description available.")
+    desc = book_info.description if book_info.description else "No description available."
     if len(desc) > EMBED.max_description_length:
         desc = desc[:EMBED.max_description_length] + "..."
     embed.description = desc
     
-    if book_info.get('cover_url'):
-        embed.set_thumbnail(url=book_info['cover_url'])
+    if book_info.cover_url:
+        embed.set_thumbnail(url=book_info.cover_url)
     
-    source = book_info.get('source', 'Unknown')
-    embed.set_footer(text=f"Source: {source}")
+    embed.set_footer(text=f"Source: {book_info.source}")
     
-    if book_info.get('goodreads_url'):
+    if book_info.goodreads_url:
         embed.add_field(
             name="🔗 Goodreads",
-            value=book_info['goodreads_url'],
+            value=book_info.goodreads_url,
             inline=False
         )
     
