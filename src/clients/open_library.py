@@ -43,25 +43,20 @@ def _rate_limited_request(
 ) -> requests.Response:
     global _last_request_time
     
-    # Calculate delay needed (with lock)
+    # Atomic rate limit check and update
     with _rate_limit_lock:
         current_time = time.time()
         time_since_last = current_time - _last_request_time
         delay = max(0, RATE_LIMIT.request_delay - time_since_last)
-    
-    # Sleep outside the lock so other threads can proceed
-    if delay > 0:
-        logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
-        time.sleep(delay)
-    
-    # Make request without holding lock
-    response = session.get(url, params=params, timeout=timeout)
-    
-    # Update timestamp (with lock)
-    with _rate_limit_lock:
+        
+        if delay > 0:
+            logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
+            time.sleep(delay)
+        
+        response = session.get(url, params=params, timeout=timeout)
         _last_request_time = time.time()
-    
-    return response
+        
+        return response
 
 
 def _make_request_with_retry(
@@ -168,16 +163,21 @@ def _extract_description(work_details: Optional[Dict]) -> str:
 def fetch_description(
     session: requests.Session,
     work_key: Optional[str]
-) -> str:
+) -> Optional[str]:
+    """Fetch book description. Returns None on error, empty string if no description."""
     if not work_key:
-        return "No description available."
+        return None
     
     try:
         details = get_book_details(session, work_key)
-        return _extract_description(details)
+        if details is None:
+            return None
+        desc = _extract_description(details)
+        # Return empty string for "no description" cases, None for errors
+        return "" if desc == "No description available." else desc
     except requests.RequestException as e:
         logger.warning(f"Failed to fetch description for {work_key}: {e}")
-        return "No description available."
+        return None
 
 
 def _get_cover_url(ol_book: Dict) -> str:
@@ -186,18 +186,21 @@ def _get_cover_url(ol_book: Dict) -> str:
         return f"https://covers.openlibrary.org/b/id/{cover_id}{_COVER_SIZE_SUFFIX}"
     
     isbns = ol_book.get('isbn', [])
-    if isbns:
-        isbn = isbns[0].replace("-", "").replace(" ", "")
+    if isbns and isinstance(isbns[0], str):
+        # Use translate for single-pass character removal
+        isbn = isbns[0].translate(str.maketrans('', '', '- '))
         return f"{OPEN_LIBRARY.covers_url}/b/isbn/{isbn}{_COVER_SIZE_SUFFIX}"
     
     return ""
 
 
 def _build_goodreads_link(title: Optional[str], author: Optional[str]) -> str:
+    if title and author:
+        return f"https://www.goodreads.com/search?q={quote(f'title:{title} author:{author}', safe='')}"  
     if title:
-        return f"https://www.goodreads.com/search?q={quote(title, safe='')}"
+        return f"https://www.goodreads.com/search?q={quote(f'title:{title}', safe='')}"
     if author:
-        return f"https://www.goodreads.com/search?q={quote(author, safe='')}"
+        return f"https://www.goodreads.com/search?q={quote(f'author:{author}', safe='')}"
     return "https://www.goodreads.com"
 
 
@@ -217,7 +220,8 @@ def fetch_and_convert_book_data(
         rating = float(rating)
     
     cover_url = _get_cover_url(ol_book)
-    description = fetch_description(session, ol_book.get('key'))
+    raw_description = fetch_description(session, ol_book.get('key'))
+    description = raw_description if raw_description is not None else "No description available."
     
     title = ol_book.get('title', 'Unknown Title')
     
@@ -239,7 +243,7 @@ def fetch_and_convert_book_data(
 def create_session() -> requests.Session:
     session = requests.Session()
     session.headers.update({
-        'User-Agent': 'Discord-Book-Bot/1.0 (https://github.com/your-repo)'
+        'User-Agent': 'Discord-Book-Bot/1.0 (https://github.com/adaland-com/discord-book-bot)'
     })
     return session
 
@@ -247,7 +251,11 @@ def create_session() -> requests.Session:
 def build_search_query(title: Optional[str], author: Optional[str]) -> str:
     parts = []
     if title:
-        parts.append(f'title:"{title}"')
+        # Escape quotes to prevent query injection
+        safe_title = title.replace('"', '\\"')
+        parts.append(f'title:"{safe_title}"')
     if author:
-        parts.append(f'author:"{author}"')
+        # Escape quotes to prevent query injection
+        safe_author = author.replace('"', '\\"')
+        parts.append(f'author:"{safe_author}"')
     return ' '.join(parts)
