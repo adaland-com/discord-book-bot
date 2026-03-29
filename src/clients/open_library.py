@@ -1,9 +1,8 @@
-"""Functional Open Library API client."""
 import time
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from functools import wraps
+from urllib.parse import quote
 import requests
 
 from config import OPEN_LIBRARY, RATE_LIMIT, CACHE
@@ -13,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class BookData:
-    """Immutable book data structure."""
     title: str
     author: str
     rating: Optional[float]
@@ -27,17 +25,24 @@ class BookData:
     edition_count: int
 
 
-# Simple in-memory cache storage
 _cache_store: Dict[str, tuple[float, Any]] = {}
+MAX_CACHE_SIZE = 1000
+
+
+def _evict_oldest_if_needed() -> None:
+    if len(_cache_store) >= MAX_CACHE_SIZE:
+        sorted_items = sorted(_cache_store.items(), key=lambda x: x[1][0])
+        to_remove = int(MAX_CACHE_SIZE * 0.2)
+        for key, _ in sorted_items[:to_remove]:
+            del _cache_store[key]
+        logger.debug(f"Evicted {to_remove} oldest cache entries")
 
 
 def _get_cache_key(query: str, limit: int, language: Optional[str]) -> str:
-    """Generate cache key for query."""
     return f"ol_search_{query.lower().strip()}_{limit}_{language}"
 
 
 def _get_from_cache(cache_key: str) -> Optional[Any]:
-    """Get result from cache if available and not expired."""
     if not CACHE.enabled:
         return None
     
@@ -51,8 +56,8 @@ def _get_from_cache(cache_key: str) -> Optional[Any]:
 
 
 def _store_in_cache(cache_key: str, data: Any) -> None:
-    """Store result in cache."""
     if CACHE.enabled:
+        _evict_oldest_if_needed()
         _cache_store[cache_key] = (time.time(), data)
         logger.debug(f"Stored in cache: {cache_key}")
 
@@ -63,8 +68,6 @@ def _rate_limited_request(
     params: Optional[Dict] = None,
     timeout: int = 10
 ) -> requests.Response:
-    """Make a rate-limited HTTP request."""
-    # Simple rate limiting using module-level last request time
     current_time = time.time()
     if hasattr(_rate_limited_request, '_last_request_time'):
         time_since_last = current_time - _rate_limited_request._last_request_time
@@ -84,7 +87,6 @@ def _make_request_with_retry(
     params: Optional[Dict] = None,
     max_retries: int = RATE_LIMIT.max_retries
 ) -> Optional[Dict]:
-    """Make HTTP request with exponential backoff retry."""
     for attempt in range(max_retries):
         try:
             response = _rate_limited_request(session, url, params)
@@ -108,7 +110,6 @@ def search_books(
     limit: int = 10,
     language: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
-    """Search for books using Open Library API."""
     logger.info(f"Searching Open Library for: '{query}' (limit={limit})")
     
     cache_key = _get_cache_key(query, limit, language)
@@ -143,7 +144,6 @@ def get_book_details(
     session: requests.Session,
     work_key: str
 ) -> Optional[Dict]:
-    """Get detailed information about a specific book work."""
     logger.info(f"Getting book details for work: {work_key}")
     
     cache_key = f"ol_details_{work_key}"
@@ -151,7 +151,6 @@ def get_book_details(
     if cached_result is not None:
         return cached_result
     
-    # Remove /works/ prefix if present
     if work_key.startswith('/works/'):
         work_key = work_key[7:]
     
@@ -168,7 +167,6 @@ def get_edition_details(
     session: requests.Session,
     edition_key: str
 ) -> Optional[Dict]:
-    """Get detailed information about a specific edition."""
     logger.info(f"Getting edition details for: {edition_key}")
     
     cache_key = f"ol_edition_{edition_key}"
@@ -176,7 +174,6 @@ def get_edition_details(
     if cached_result is not None:
         return cached_result
     
-    # Remove /books/ prefix if present
     if edition_key.startswith('/books/'):
         edition_key = edition_key[7:]
     
@@ -190,7 +187,6 @@ def get_edition_details(
 
 
 def _extract_description(work_details: Optional[Dict]) -> str:
-    """Extract description from work details."""
     if not work_details:
         return "No description available."
     
@@ -201,7 +197,6 @@ def _extract_description(work_details: Optional[Dict]) -> str:
     if desc and len(str(desc).strip()) > 10:
         return str(desc).strip()
     
-    # Fallback to first sentence
     first_sentence = work_details.get('first_sentence')
     if isinstance(first_sentence, dict):
         first_sentence = first_sentence.get('value', '')
@@ -215,25 +210,22 @@ def fetch_description(
     session: requests.Session,
     work_key: Optional[str]
 ) -> str:
-    """Fetch description from work details API."""
     if not work_key:
         return "No description available."
     
     try:
         details = get_book_details(session, work_key)
         return _extract_description(details)
-    except Exception as e:
+    except requests.RequestException as e:
         logger.warning(f"Failed to fetch description for {work_key}: {e}")
         return "No description available."
 
 
 def _get_cover_url(ol_book: Dict, session: requests.Session) -> str:
-    """Extract or construct cover URL."""
     cover_id = ol_book.get('cover_i')
     if cover_id:
         return f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
     
-    # Fallback to ISBN-based cover
     isbns = ol_book.get('isbn', [])
     if isbns:
         isbn = isbns[0].replace("-", "").replace(" ", "")
@@ -243,11 +235,10 @@ def _get_cover_url(ol_book: Dict, session: requests.Session) -> str:
 
 
 def _build_goodreads_link(title: Optional[str], author: Optional[str]) -> str:
-    """Build Goodreads search link."""
     if title:
-        return f"https://www.goodreads.com/search?q={title}"
+        return f"https://www.goodreads.com/search?q={quote(title, safe='')}"
     if author:
-        return f"https://www.goodreads.com/search?q={author}"
+        return f"https://www.goodreads.com/search?q={quote(author, safe='')}"
     return "https://www.goodreads.com"
 
 
@@ -255,7 +246,6 @@ def convert_to_book_data(
     session: requests.Session,
     ol_book: Dict
 ) -> BookData:
-    """Convert Open Library book data to standard BookData format."""
     authors = ol_book.get('author_name', [])
     author = ', '.join(authors) if authors else "Unknown Author"
     
@@ -284,7 +274,6 @@ def convert_to_book_data(
 
 
 def create_session() -> requests.Session:
-    """Create a configured requests session."""
     session = requests.Session()
     session.headers.update({
         'User-Agent': 'Discord-Book-Bot/1.0 (https://github.com/your-repo)'

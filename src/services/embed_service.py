@@ -1,11 +1,9 @@
-"""Pure functions for building Discord embeds."""
 from typing import Dict, Any, Optional
 import discord
 from config import EMBED
 
 
 def create_book_embed(book_info: Dict[str, Any]) -> discord.Embed:
-    """Create a Discord embed from book information."""
     embed = discord.Embed(
         title=book_info.get('title', 'Unknown Title'),
         url=book_info.get('url'),
@@ -44,7 +42,6 @@ def create_book_embed(book_info: Dict[str, Any]) -> discord.Embed:
     source = book_info.get('source', 'Unknown')
     embed.set_footer(text=f"Source: {source}")
     
-    # Add external links
     if book_info.get('goodreads_url'):
         embed.add_field(
             name="🔗 Goodreads",
@@ -56,7 +53,6 @@ def create_book_embed(book_info: Dict[str, Any]) -> discord.Embed:
 
 
 def create_help_embed() -> discord.Embed:
-    """Create the help menu embed."""
     embed = discord.Embed(
         title="Book Search Help",
         color=EMBED.color
@@ -76,7 +72,6 @@ def create_no_results_message(
     title: Optional[str] = None,
     author: Optional[str] = None
 ) -> str:
-    """Create a 'no results found' message."""
     parts = []
     if title:
         parts.append(f"title '{title}'")
@@ -91,10 +86,9 @@ def create_no_results_message(
 
 
 def create_error_embed(message: str) -> discord.Embed:
-    """Create an error embed."""
     embed = discord.Embed(
         title="Error",
         description=message,
-        color=0xFF0000  # Red
+        color=0xFF0000
     )
     return embed

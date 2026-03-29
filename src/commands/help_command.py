@@ -1,4 +1,3 @@
-"""Help command handler."""
 import discord
 from discord import app_commands
 
@@ -7,7 +6,6 @@ from src.services.logging_service import log_usage
 
 
 def create_help_command() -> app_commands.Command:
-    """Create the /help slash command."""
     
     @app_commands.command(
         name="help",

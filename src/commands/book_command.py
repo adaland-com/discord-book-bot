@@ -1,4 +1,4 @@
-"""Book command handler."""
+import asyncio
 from typing import Optional
 import discord
 from discord import app_commands
@@ -16,7 +16,6 @@ import requests
 
 
 class BookCommandHandler:
-    """Handler for the /book command."""
     
     def __init__(self):
         self.session: requests.Session = create_session()
@@ -27,18 +26,14 @@ class BookCommandHandler:
         title: Optional[str] = None,
         author: Optional[str] = None
     ) -> None:
-        """Handle the /book slash command."""
-        # Defer immediately to prevent timeout
         await interaction.response.defer()
         
-        # Validate input
         is_valid, error = validate_search_params(title, author)
         if not is_valid:
             embed = create_error_embed(error)
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
         
-        # Log usage
         query_parts = []
         if title:
             query_parts.append(f"title: {title}")
@@ -53,18 +48,15 @@ class BookCommandHandler:
             "DM" if interaction.guild is None else f"Server: {interaction.guild.name}"
         )
         
-        # Search for book
-        book_info = search_book(self.session, title, author)
+        book_info = await asyncio.to_thread(search_book, self.session, title, author)
         
         if book_info is None:
             message = create_no_results_message(title, author)
             await interaction.followup.send(message)
             return
         
-        # Create and send embed
         embed = create_book_embed(book_info)
         
-        # Add Anna's Archive link
         embed.add_field(
             name="🏴‍☠️ Anna's Archive",
             value="https://shadowlibraries.github.io/DirectDownloads/AnnasArchive/",
@@ -75,7 +67,6 @@ class BookCommandHandler:
 
 
 def create_book_command() -> app_commands.Command:
-    """Create the /book slash command."""
     handler = BookCommandHandler()
     
     @app_commands.command(

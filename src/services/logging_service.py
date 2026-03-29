@@ -1,4 +1,3 @@
-"""Pure functions for logging."""
 import datetime
 from typing import Optional
 
@@ -9,7 +8,6 @@ def format_log_message(
     query: Optional[str] = None,
     location: str = "Unknown"
 ) -> str:
-    """Format a log message for bot usage."""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     if query:
@@ -23,7 +21,6 @@ def log_usage(
     query: Optional[str] = None,
     location: str = "Unknown"
 ) -> None:
-    """Log bot usage to console."""
     message = format_log_message(user_name, command, query, location)
     print(message)
 
@@ -33,7 +30,6 @@ def log_search_attempt(
     title: Optional[str] = None,
     author: Optional[str] = None
 ) -> None:
-    """Log a search attempt from a specific source."""
     query_parts = []
     if title:
         query_parts.append(f"title: {title}")
