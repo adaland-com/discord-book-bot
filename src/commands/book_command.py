@@ -14,64 +14,9 @@ from src.embed_service import (
     create_no_results_message,
     create_error_embed,
 )
-from config import EMBED_EMOJI_ARCHIVE, EMBED_ARCHIVE_LINK, SEARCH_MAX_RESULTS
+from config import SEARCH_MAX_RESULTS
 
 logger = logging.getLogger(__name__)
-
-
-async def _handle_book_command(
-    interaction: discord.Interaction,
-    title: Optional[str] = None,
-    author: Optional[str] = None
-) -> None:
-    await interaction.response.defer()
-    
-    # Validate search params
-    if not title and not author:
-        embed = create_error_embed("Please provide at least a title or an author!")
-        await interaction.followup.send(embed=embed, ephemeral=True)
-        return
-    
-    query = build_search_query(title, author)
-    
-    location = "DM" if interaction.guild is None else f"guild={interaction.guild.name}"
-    logger.info(f"[/book] user={interaction.user.name} query='{query}' {location}")
-    
-    session = interaction.client.session
-    try:
-        await interaction.client.rate_limiter.acquire()
-        result = await search_books(session, query, limit=SEARCH_MAX_RESULTS)
-        
-        if result and result.get('books'):
-            await interaction.client.rate_limiter.acquire()
-            book_info = await fetch_and_convert_book_data(session, result['books'][0])
-        else:
-            book_info = None
-    except APIError as e:
-        logger.error(f"[/book] API error: {e}")
-        embed = create_error_embed("Open Library API is unavailable. Please try again later.")
-        await interaction.followup.send(embed=embed, ephemeral=True)
-        return
-    except Exception as e:
-        logger.error(f"[/book] Unexpected error: {type(e).__name__}: {e}")
-        embed = create_error_embed("Search failed due to an unexpected error.")
-        await interaction.followup.send(embed=embed, ephemeral=True)
-        return
-    
-    if book_info is None:
-        message = create_no_results_message(title, author)
-        await interaction.followup.send(message)
-        return
-    
-    embed = create_book_embed(book_info)
-    
-    embed.add_field(
-        name=f"{EMBED_EMOJI_ARCHIVE} Anna's Archive",
-        value=EMBED_ARCHIVE_LINK,
-        inline=False
-    )
-    
-    await interaction.followup.send(embed=embed)
 
 
 def create_book_command() -> app_commands.Command:
@@ -96,7 +41,47 @@ def create_book_command() -> app_commands.Command:
         interaction: discord.Interaction,
         title: Optional[str] = None,
         author: Optional[str] = None
-    ):
-        await _handle_book_command(interaction, title, author)
+    ) -> None:
+        # Validate search params first (before deferring)
+        if not title and not author:
+            embed = create_error_embed("Please provide at least a title or an author!")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        await interaction.response.defer()
+        
+        query = build_search_query(title, author)
+        
+        location = "DM" if interaction.guild is None else f"guild={interaction.guild.name}"
+        logger.info(f"[/book] user={interaction.user.name} query='{query}' {location}")
+        
+        session = interaction.client.session
+        try:
+            await interaction.client.rate_limiter.acquire()
+            result = await search_books(session, query, limit=SEARCH_MAX_RESULTS)
+            
+            if result and result.get('books'):
+                await interaction.client.rate_limiter.acquire()
+                book_info = await fetch_and_convert_book_data(session, result['books'][0])
+            else:
+                book_info = None
+        except APIError as e:
+            logger.error(f"[/book] API error: {e}")
+            embed = create_error_embed("Open Library API is unavailable. Please try again later.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        except Exception as e:
+            logger.error(f"[/book] Unexpected error: {type(e).__name__}: {e}")
+            embed = create_error_embed("Search failed due to an unexpected error.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        
+        if book_info is None:
+            message = create_no_results_message(title, author)
+            await interaction.followup.send(message)
+            return
+        
+        embed = create_book_embed(book_info)
+        await interaction.followup.send(embed=embed)
     
     return book_command

@@ -111,7 +111,7 @@ async def get_book_details(
     logger.info(f"Getting book details for work: {work_key}")
     
     if work_key.startswith('/works/'):
-        work_key = work_key.removeprefix('/works/')
+        work_key = work_key.replace('/works/', '', 1)
     
     url = f"{OPEN_LIBRARY_BASE_URL}{OPEN_LIBRARY_WORKS_ENDPOINT}/{work_key}.json"
     return await _make_request_with_retry(session, url)
@@ -124,7 +124,7 @@ async def get_edition_details(
     logger.info(f"Getting edition details for: {edition_key}")
     
     if edition_key.startswith('/books/'):
-        edition_key = edition_key.removeprefix('/books/')
+        edition_key = edition_key.replace('/books/', '', 1)
     
     url = f"{OPEN_LIBRARY_BASE_URL}{OPEN_LIBRARY_BOOKS_ENDPOINT}/{edition_key}.json"
     return await _make_request_with_retry(session, url)

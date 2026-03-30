@@ -22,24 +22,22 @@ logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
-    """Async-compatible rate limiter for Open Library API calls."""
+    """Simple async rate limiter using timestamp-based delay."""
     
     def __init__(self, request_delay: float):
-        self._lock = asyncio.Lock()
         self._last_request_time: float = 0.0
         self._request_delay = request_delay
     
     async def acquire(self) -> None:
         """Acquire rate limit, sleeping if necessary."""
-        async with self._lock:
-            current_time = time.monotonic()
-            time_since_last = current_time - self._last_request_time
-            delay = max(0, self._request_delay - time_since_last)
-            
-            if delay > 0:
-                await asyncio.sleep(delay)
-            
-            self._last_request_time = time.monotonic()
+        current_time = time.monotonic()
+        time_since_last = current_time - self._last_request_time
+        delay = max(0, self._request_delay - time_since_last)
+        
+        if delay > 0:
+            await asyncio.sleep(delay)
+        
+        self._last_request_time = time.monotonic()
 
 
 class BookBot(commands.Bot):
