@@ -2,8 +2,9 @@ import asyncio
 import logging
 import time
 import discord
-from discord.ext import commands
 from discord import app_commands
+
+from discord.ext import commands
 
 from config import DISCORD, RATE_LIMIT
 from src.commands import (
@@ -45,11 +46,7 @@ class BookBot(commands.Bot):
     
     def __init__(self):
         intents = discord.Intents.default()
-        super().__init__(
-            command_prefix="",
-            intents=intents,
-            help_command=None
-        )
+        super().__init__(intents=intents, command_prefix="!")
         
         self.session = None
         self.rate_limiter = RateLimiter(RATE_LIMIT.request_delay)

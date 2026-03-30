@@ -1,5 +1,6 @@
 """Centralized configuration for the Discord Book Bot."""
 import os
+from types import SimpleNamespace
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -33,7 +34,7 @@ EMBED_MAX_DESCRIPTION_LENGTH = 200
 EMBED_ARCHIVE_LINK = "https://shadowlibraries.github.io/DirectDownloads/AnnasArchive/"
 EMBED_EMOJI_AUTHOR = "👤"
 EMBED_EMOJI_RATING = "⭐"
-EMBED_EMOJI_YEAR = "�"
+EMBED_EMOJI_YEAR = "🗓️"
 EMBED_EMOJI_LINK = "🔗"
 EMBED_EMOJI_ARCHIVE = "🏴‍☠️"
 
@@ -43,21 +44,13 @@ SEARCH_TIMEOUT = 10
 SEARCH_COVER_SIZE = "-M.jpg"
 
 
-# Legacy compatibility - config objects that mimic old dataclass structure
-class _ConfigNamespace:
-    """Simple namespace for legacy compatibility."""
-    def __init__(self, **kwargs):
-        for k, v in kwargs.items():
-            setattr(self, k.lower(), v)
-
-
 # Backwards compatibility exports
-DISCORD = _ConfigNamespace(
+DISCORD = SimpleNamespace(
     token=DISCORD_TOKEN,
     restrict_dm_to_guild_members=DISCORD_RESTRICT_DM
 )
 
-OPEN_LIBRARY = _ConfigNamespace(
+OPEN_LIBRARY = SimpleNamespace(
     base_url=OPEN_LIBRARY_BASE_URL,
     search_endpoint=OPEN_LIBRARY_SEARCH_ENDPOINT,
     works_endpoint=OPEN_LIBRARY_WORKS_ENDPOINT,
@@ -65,13 +58,13 @@ OPEN_LIBRARY = _ConfigNamespace(
     covers_url=OPEN_LIBRARY_COVERS_URL
 )
 
-RATE_LIMIT = _ConfigNamespace(
+RATE_LIMIT = SimpleNamespace(
     request_delay=RATE_LIMIT_REQUEST_DELAY,
     max_retries=RATE_LIMIT_MAX_RETRIES,
     retry_delay=RATE_LIMIT_RETRY_DELAY
 )
 
-EMBED = _ConfigNamespace(
+EMBED = SimpleNamespace(
     color=EMBED_COLOR,
     error_color=EMBED_ERROR_COLOR,
     max_description_length=EMBED_MAX_DESCRIPTION_LENGTH,
@@ -83,7 +76,7 @@ EMBED = _ConfigNamespace(
     emoji_archive=EMBED_EMOJI_ARCHIVE
 )
 
-SEARCH = _ConfigNamespace(
+SEARCH = SimpleNamespace(
     max_results=SEARCH_MAX_RESULTS,
     timeout=SEARCH_TIMEOUT,
     cover_size=SEARCH_COVER_SIZE
