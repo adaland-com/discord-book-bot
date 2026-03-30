@@ -6,7 +6,7 @@ from discord import app_commands
 
 from discord.ext import commands
 
-from config import DISCORD, RATE_LIMIT
+from config import DISCORD_TOKEN, RATE_LIMIT_REQUEST_DELAY
 from src.commands import (
     create_book_command,
     create_help_command,
@@ -46,10 +46,10 @@ class BookBot(commands.Bot):
     
     def __init__(self):
         intents = discord.Intents.default()
-        super().__init__(intents=intents, command_prefix="!")
+        super().__init__(intents=intents, command_prefix=None)
         
         self.session = None
-        self.rate_limiter = RateLimiter(RATE_LIMIT.request_delay)
+        self.rate_limiter = RateLimiter(RATE_LIMIT_REQUEST_DELAY)
     
     async def setup_hook(self):
         self.session = create_session()
@@ -74,7 +74,7 @@ class BookBot(commands.Bot):
 
 
 def main():
-    token = DISCORD.token
+    token = DISCORD_TOKEN
     
     if not token:
         logger.error("No Discord token found. Please set DISCORD_TOKEN in .env")

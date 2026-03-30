@@ -14,7 +14,7 @@ from src.embed_service import (
     create_no_results_message,
     create_error_embed,
 )
-from config import EMBED, SEARCH
+from config import EMBED_EMOJI_ARCHIVE, EMBED_ARCHIVE_LINK, SEARCH_MAX_RESULTS
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +39,10 @@ async def _handle_book_command(
     
     session = interaction.client.session
     try:
-        # Rate limit before API call
         await interaction.client.rate_limiter.acquire()
-        result = await search_books(session, query, limit=SEARCH.max_results)
+        result = await search_books(session, query, limit=SEARCH_MAX_RESULTS)
         
         if result and result.get('books'):
-            # Rate limit before API call
             await interaction.client.rate_limiter.acquire()
             book_info = await fetch_and_convert_book_data(session, result['books'][0])
         else:
@@ -68,8 +66,8 @@ async def _handle_book_command(
     embed = create_book_embed(book_info)
     
     embed.add_field(
-        name=f"{EMBED.emoji_archive} Anna's Archive",
-        value=EMBED.archive_link,
+        name=f"{EMBED_EMOJI_ARCHIVE} Anna's Archive",
+        value=EMBED_ARCHIVE_LINK,
         inline=False
     )
     

@@ -2,10 +2,10 @@ import asyncio
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from urllib.parse import quote
+from urllib.parse import quote_plus
 import aiohttp
 
-from config import OPEN_LIBRARY, RATE_LIMIT, SEARCH
+from config import OPEN_LIBRARY_BASE_URL, OPEN_LIBRARY_SEARCH_ENDPOINT, OPEN_LIBRARY_WORKS_ENDPOINT, OPEN_LIBRARY_BOOKS_ENDPOINT, OPEN_LIBRARY_COVERS_URL, RATE_LIMIT_MAX_RETRIES, RATE_LIMIT_RETRY_DELAY, SEARCH_MAX_RESULTS, SEARCH_TIMEOUT, SEARCH_COVER_SIZE
 
 # Module-level constants
 _MIN_DESC_LENGTH = 10
@@ -50,9 +50,9 @@ async def _make_request_with_retry(
     session: aiohttp.ClientSession,
     url: str,
     params: Optional[Dict] = None,
-    max_retries: int = RATE_LIMIT.max_retries,
-    timeout: int = SEARCH.timeout
-) -> Optional[Dict]:
+    max_retries: int = RATE_LIMIT_MAX_RETRIES,
+    timeout: int = SEARCH_TIMEOUT
+) -> Dict:
     """Make HTTP request with exponential backoff retry."""
     for attempt in range(max_retries):
         try:
@@ -62,24 +62,22 @@ async def _make_request_with_retry(
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             if attempt == max_retries - 1:
                 logger.error(f"Request failed after {max_retries} attempts: {e}")
-                return None
+                raise APIError(f"Request failed after {max_retries} attempts: {e}")
             
-            wait_time = RATE_LIMIT.retry_delay * (2 ** attempt)
+            wait_time = RATE_LIMIT_RETRY_DELAY * (2 ** attempt)
             logger.warning(f"Request failed (attempt {attempt + 1}), retrying in {wait_time}s: {e}")
             await asyncio.sleep(wait_time)
-    
-    return None
 
 
 async def search_books(
     session: aiohttp.ClientSession,
     query: str,
-    limit: int = SEARCH.max_results,
+    limit: int = SEARCH_MAX_RESULTS,
     language: Optional[str] = None
-) -> Optional[Dict[str, Any]]:
+) -> Dict[str, Any]:
     logger.info(f"Searching Open Library for: '{query}' (limit={limit})")
     
-    url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.search_endpoint}"
+    url = f"{OPEN_LIBRARY_BASE_URL}{OPEN_LIBRARY_SEARCH_ENDPOINT}"
     params = {
         'q': query,
         'limit': limit,
@@ -90,8 +88,6 @@ async def search_books(
         params['language'] = language
     
     data = await _make_request_with_retry(session, url, params)
-    if data is None:
-        return None
     
     # Validate response structure to detect schema drift
     docs = data.get('docs', [])
@@ -111,48 +107,48 @@ async def search_books(
 async def get_book_details(
     session: aiohttp.ClientSession,
     work_key: str
-) -> Optional[Dict]:
+) -> Dict:
     logger.info(f"Getting book details for work: {work_key}")
     
     if work_key.startswith('/works/'):
         work_key = work_key.removeprefix('/works/')
     
-    url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.works_endpoint}/{work_key}.json"
+    url = f"{OPEN_LIBRARY_BASE_URL}{OPEN_LIBRARY_WORKS_ENDPOINT}/{work_key}.json"
     return await _make_request_with_retry(session, url)
 
 
 async def get_edition_details(
     session: aiohttp.ClientSession,
     edition_key: str
-) -> Optional[Dict]:
+) -> Dict:
     logger.info(f"Getting edition details for: {edition_key}")
     
     if edition_key.startswith('/books/'):
         edition_key = edition_key.removeprefix('/books/')
     
-    url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.books_endpoint}/{edition_key}.json"
+    url = f"{OPEN_LIBRARY_BASE_URL}{OPEN_LIBRARY_BOOKS_ENDPOINT}/{edition_key}.json"
     return await _make_request_with_retry(session, url)
 
 
 def _extract_description(data: Dict) -> str:
     """Extract description from work details or search result data."""
-    desc = data.get('description')
+    desc = data.get('description', '')
     if isinstance(desc, dict):
         desc = desc.get('value', '')
     elif isinstance(desc, list):
-        desc = ' '.join(desc)
+        desc = ' '.join(str(d) for d in desc)
     
-    desc_str = str(desc).strip() if desc else ''
+    desc_str = str(desc).strip()
     if len(desc_str) > _MIN_DESC_LENGTH:
         return desc_str
     
-    first_sentence = data.get('first_sentence')
+    first_sentence = data.get('first_sentence', '')
     if isinstance(first_sentence, dict):
         first_sentence = first_sentence.get('value', '')
     elif isinstance(first_sentence, list):
-        first_sentence = ' '.join(first_sentence)
+        first_sentence = ' '.join(str(s) for s in first_sentence)
     
-    fs_str = str(first_sentence).strip() if first_sentence else ''
+    fs_str = str(first_sentence).strip()
     if len(fs_str) > _MIN_SENTENCE_LENGTH:
         return f"First sentence: {fs_str}"
     
@@ -169,10 +165,8 @@ async def fetch_description(
     
     try:
         details = await get_book_details(session, work_key)
-        if details is None:
-            return ""
         return _extract_description(details)
-    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError, APIError) as e:
         logger.warning(f"Failed to fetch description for {work_key}: {e}")
         return ""
 
@@ -180,12 +174,12 @@ async def fetch_description(
 def _get_cover_url(ol_book: Dict) -> str:
     cover_id = ol_book.get('cover_i')
     if cover_id:
-        return f"https://covers.openlibrary.org/b/id/{cover_id}{SEARCH.cover_size}"
+        return f"https://covers.openlibrary.org/b/id/{cover_id}{SEARCH_COVER_SIZE}"
     
     isbns = ol_book.get('isbn', [])
     if isinstance(isbns, list) and isbns and isinstance(isbns[0], str):
         isbn = isbns[0].translate(str.maketrans('', '', '- '))
-        return f"{OPEN_LIBRARY.covers_url}/b/isbn/{isbn}{SEARCH.cover_size}"
+        return f"{OPEN_LIBRARY_COVERS_URL}/b/isbn/{isbn}{SEARCH_COVER_SIZE}"
     
     return ""
 
@@ -193,7 +187,7 @@ def _get_cover_url(ol_book: Dict) -> str:
 def _build_goodreads_link(title: Optional[str], author: Optional[str]) -> str:
     """Build Goodreads search URL."""
     def encode_query(text: str) -> str:
-        return quote(text, safe='').replace('%20', '+')
+        return quote_plus(text)
     
     if title and author:
         return f"https://www.goodreads.com/search?q={encode_query(f'title:{title} author:{author}')}"

@@ -1,6 +1,6 @@
 from typing import Optional
 import discord
-from config import EMBED
+from config import EMBED_COLOR, EMBED_ERROR_COLOR, EMBED_MAX_DESCRIPTION_LENGTH, EMBED_ARCHIVE_LINK, EMBED_EMOJI_AUTHOR, EMBED_EMOJI_RATING, EMBED_EMOJI_YEAR, EMBED_EMOJI_LINK, EMBED_EMOJI_ARCHIVE
 from src.clients.open_library import BookData
 
 
@@ -8,33 +8,33 @@ def create_book_embed(book_info: BookData) -> discord.Embed:
     embed = discord.Embed(
         title=book_info.title,
         url=book_info.url,
-        color=EMBED.color
+        color=EMBED_COLOR
     )
     
     if book_info.author:
         embed.add_field(
-            name=f"{EMBED.emoji_author} Author",
+            name=f"{EMBED_EMOJI_AUTHOR} Author",
             value=book_info.author,
             inline=False
         )
     
     if book_info.rating:
         embed.add_field(
-            name=f"{EMBED.emoji_rating} Rating",
+            name=f"{EMBED_EMOJI_RATING} Rating",
             value=f"{book_info.rating}/5.0",
             inline=True
         )
     
     if book_info.publication_year:
         embed.add_field(
-            name=f"{EMBED.emoji_year} Year",
+            name=f"{EMBED_EMOJI_YEAR} Year",
             value=str(book_info.publication_year),
             inline=True
         )
     
     desc = book_info.description if book_info.description else "No description available."
-    if len(desc) > EMBED.max_description_length:
-        desc = desc[:EMBED.max_description_length] + "..."
+    if len(desc) > EMBED_MAX_DESCRIPTION_LENGTH:
+        desc = desc[:EMBED_MAX_DESCRIPTION_LENGTH] + "..."
     embed.description = desc
     
     if book_info.cover_url:
@@ -43,8 +43,14 @@ def create_book_embed(book_info: BookData) -> discord.Embed:
     embed.set_footer(text=f"Source: {book_info.source}")
     
     embed.add_field(
-        name=f"{EMBED.emoji_link} Goodreads",
+        name=f"{EMBED_EMOJI_LINK} Goodreads",
         value=book_info.goodreads_url,
+        inline=False
+    )
+    
+    embed.add_field(
+        name=f"{EMBED_EMOJI_ARCHIVE} Anna's Archive",
+        value=EMBED_ARCHIVE_LINK,
         inline=False
     )
     
@@ -54,7 +60,7 @@ def create_book_embed(book_info: BookData) -> discord.Embed:
 def create_help_embed() -> discord.Embed:
     embed = discord.Embed(
         title="Book Search Help",
-        color=EMBED.color
+        color=EMBED_COLOR
     )
     embed.description = (
         "Use `/book` to search for books anywhere on Discord!\n\n"
@@ -90,6 +96,6 @@ def create_error_embed(message: str) -> discord.Embed:
     embed = discord.Embed(
         title="Error",
         description=message,
-        color=EMBED.error_color
+        color=EMBED_ERROR_COLOR
     )
     return embed
