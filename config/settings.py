@@ -1,70 +1,43 @@
 """Centralized configuration for the Discord Book Bot."""
 import os
-from dataclasses import dataclass
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-@dataclass(frozen=True)
-class DiscordConfig:
-    """Discord bot configuration (immutable)."""
-    token: str
-    prefix: str = "!"
-    restrict_dm_to_guild_members: bool = False
+def _parse_bool(value: str) -> bool:
+    """Parse a string value as boolean (case-insensitive)."""
+    return value.lower() in ('true', '1', 'yes', 'on')
 
-@dataclass(frozen=True)
-class OpenLibraryConfig:
-    """Open Library API configuration (immutable)."""
-    base_url: str = "https://openlibrary.org"
-    search_endpoint: str = "/search.json"
-    works_endpoint: str = "/works"
-    books_endpoint: str = "/books"
-    covers_url: str = "https://covers.openlibrary.org"
 
-@dataclass(frozen=True)
-class RateLimitConfig:
-    """Rate limiting configuration (immutable)."""
-    request_delay: float = 1.0
-    max_retries: int = 3
-    retry_delay: float = 2.0
+# Discord Configuration
+DISCORD_TOKEN = os.getenv('DISCORD_TOKEN', '')
+DISCORD_RESTRICT_DM = _parse_bool(os.getenv('RESTRICT_DM_TO_GUILD_MEMBERS', 'false'))
 
-@dataclass(frozen=True)
-class CacheConfig:
-    """Cache configuration (immutable)."""
-    ttl_seconds: int = 3600
-    enabled: bool = True
+# Open Library API
+OPEN_LIBRARY_BASE_URL = "https://openlibrary.org"
+OPEN_LIBRARY_SEARCH_ENDPOINT = "/search.json"
+OPEN_LIBRARY_WORKS_ENDPOINT = "/works"
+OPEN_LIBRARY_BOOKS_ENDPOINT = "/books"
+OPEN_LIBRARY_COVERS_URL = "https://covers.openlibrary.org"
 
-@dataclass(frozen=True)
-class EmbedConfig:
-    """Discord embed configuration (immutable)."""
-    color: int = 0x00b4d8
-    max_description_length: int = 200
+# Rate Limiting
+RATE_LIMIT_REQUEST_DELAY = 1.0
+RATE_LIMIT_MAX_RETRIES = 3
+RATE_LIMIT_RETRY_DELAY = 2.0
 
-@dataclass(frozen=True)
-class SearchConfig:
-    """Search configuration (immutable)."""
-    max_results: int = 5
-    timeout: int = 10
+# Embed Settings
+EMBED_COLOR = 0x00b4d8
+EMBED_ERROR_COLOR = 0xFF0000
+EMBED_MAX_DESCRIPTION_LENGTH = 200
+EMBED_ARCHIVE_LINK = "https://shadowlibraries.github.io/DirectDownloads/AnnasArchive/"
+EMBED_EMOJI_AUTHOR = "👤"
+EMBED_EMOJI_RATING = "⭐"
+EMBED_EMOJI_YEAR = "🗓️"
+EMBED_EMOJI_LINK = "🔗"
+EMBED_EMOJI_ARCHIVE = "🏴‍☠️"
 
-# Global configuration instances
-DISCORD = DiscordConfig(
-    token=os.getenv('DISCORD_TOKEN', ''),
-    prefix=os.getenv('BOT_PREFIX', '!'),
-    restrict_dm_to_guild_members=os.getenv(
-        'RESTRICT_DM_TO_GUILD_MEMBERS', 'false'
-    ).lower() == 'true'
-)
-
-OPEN_LIBRARY = OpenLibraryConfig()
-
-RATE_LIMIT = RateLimitConfig()
-
-CACHE = CacheConfig(
-    ttl_seconds=int(os.getenv('CACHE_TTL', '3600')),
-    enabled=os.getenv('ENABLE_CACHE', 'true').lower() == 'true'
-)
-
-EMBED = EmbedConfig()
-
-SEARCH = SearchConfig()
+# Search Settings
+SEARCH_MAX_RESULTS = 5
+SEARCH_TIMEOUT = 10
+SEARCH_COVER_SIZE = "-M.jpg"

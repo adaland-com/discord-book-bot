@@ -1,83 +1,25 @@
-"""Book command handler."""
+import logging
 from typing import Optional
 import discord
 from discord import app_commands
 
-from src.parsers.book_parser import parse_query
-from src.services.book_service import search_book, validate_search_params
-from src.services.embed_service import (
+from src.clients.open_library import (
+    search_books,
+    fetch_and_convert_book_data,
+    build_search_query,
+    APIError,
+)
+from src.embed_service import (
     create_book_embed,
     create_no_results_message,
     create_error_embed,
 )
-from src.services.logging_service import log_usage
-from src.clients.open_library import create_session
-import requests
+from config import SEARCH_MAX_RESULTS
 
-
-class BookCommandHandler:
-    """Handler for the /book command."""
-    
-    def __init__(self):
-        self.session: requests.Session = create_session()
-    
-    async def handle(
-        self,
-        interaction: discord.Interaction,
-        title: Optional[str] = None,
-        author: Optional[str] = None
-    ) -> None:
-        """Handle the /book slash command."""
-        # Defer immediately to prevent timeout
-        await interaction.response.defer()
-        
-        # Validate input
-        is_valid, error = validate_search_params(title, author)
-        if not is_valid:
-            embed = create_error_embed(error)
-            await interaction.followup.send(embed=embed, ephemeral=True)
-            return
-        
-        # Log usage
-        query_parts = []
-        if title:
-            query_parts.append(f"title: {title}")
-        if author:
-            query_parts.append(f"author: {author}")
-        query_str = " | ".join(query_parts)
-        
-        log_usage(
-            interaction.user.name,
-            "/book",
-            query_str,
-            "DM" if interaction.guild is None else f"Server: {interaction.guild.name}"
-        )
-        
-        # Search for book
-        book_info = search_book(self.session, title, author)
-        
-        if book_info is None:
-            message = create_no_results_message(title, author)
-            await interaction.followup.send(message)
-            return
-        
-        # Create and send embed
-        embed = create_book_embed(book_info)
-        
-        # Add Anna's Archive link
-        embed.add_field(
-            name="🏴‍☠️ Anna's Archive",
-            value="https://shadowlibraries.github.io/DirectDownloads/AnnasArchive/",
-            inline=False
-        )
-        
-        await interaction.followup.send(embed=embed)
+logger = logging.getLogger(__name__)
 
 
 def create_book_command() -> app_commands.Command:
-    """Create the /book slash command."""
-    handler = BookCommandHandler()
-    
     @app_commands.command(
         name="book",
         description="Search for a book anywhere (DM, servers, group chats)"
@@ -99,7 +41,47 @@ def create_book_command() -> app_commands.Command:
         interaction: discord.Interaction,
         title: Optional[str] = None,
         author: Optional[str] = None
-    ):
-        await handler.handle(interaction, title, author)
+    ) -> None:
+        # Validate search params first (before deferring)
+        if not title and not author:
+            embed = create_error_embed("Please provide at least a title or an author!")
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+            return
+        
+        await interaction.response.defer()
+        
+        query = build_search_query(title, author)
+        
+        location = "DM" if interaction.guild is None else f"guild={interaction.guild.name}"
+        logger.info(f"[/book] user={interaction.user.name} query='{query}' {location}")
+        
+        session = interaction.client.session
+        try:
+            await interaction.client.rate_limiter.acquire()
+            result = await search_books(session, query, limit=SEARCH_MAX_RESULTS)
+            
+            if result and result.get('books'):
+                await interaction.client.rate_limiter.acquire()
+                book_info = await fetch_and_convert_book_data(session, result['books'][0])
+            else:
+                book_info = None
+        except APIError as e:
+            logger.error(f"[/book] API error: {e}")
+            embed = create_error_embed("Open Library API is unavailable. Please try again later.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        except Exception as e:
+            logger.error(f"[/book] Unexpected error: {type(e).__name__}: {e}")
+            embed = create_error_embed("Search failed due to an unexpected error.")
+            await interaction.followup.send(embed=embed, ephemeral=True)
+            return
+        
+        if book_info is None:
+            message = create_no_results_message(title, author)
+            await interaction.followup.send(message)
+            return
+        
+        embed = create_book_embed(book_info)
+        await interaction.followup.send(embed=embed)
     
     return book_command

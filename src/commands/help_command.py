@@ -1,13 +1,13 @@
-"""Help command handler."""
+import logging
 import discord
 from discord import app_commands
 
-from src.services.embed_service import create_help_embed
-from src.services.logging_service import log_usage
+from src.embed_service import create_help_embed
+
+logger = logging.getLogger(__name__)
 
 
 def create_help_command() -> app_commands.Command:
-    """Create the /help slash command."""
     
     @app_commands.command(
         name="help",
@@ -23,12 +23,8 @@ def create_help_command() -> app_commands.Command:
         users=True
     )
     async def help_command(interaction: discord.Interaction):
-        log_usage(
-            interaction.user.name,
-            "/help",
-            None,
-            "DM" if interaction.guild is None else f"Server: {interaction.guild.name}"
-        )
+        location = "DM" if interaction.guild is None else f"guild={interaction.guild.name}"
+        logger.info(f"[/help] user={interaction.user.name} {location}")
         
         embed = create_help_embed()
         await interaction.response.send_message(embed=embed)

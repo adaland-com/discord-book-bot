@@ -1,56 +1,81 @@
-"""Unified Discord Book Bot - merges bot.py and bot2.py functionality."""
+import asyncio
+import logging
+import time
 import discord
-from discord.ext import commands
 from discord import app_commands
 
-from config import DISCORD
+from discord.ext import commands
+
+from config import DISCORD_TOKEN, RATE_LIMIT_REQUEST_DELAY
 from src.commands import (
     create_book_command,
     create_help_command,
-    create_google_command,
 )
 from src.clients.open_library import create_session
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+logger = logging.getLogger(__name__)
+
+
+class RateLimiter:
+    """Simple async rate limiter using timestamp-based delay."""
+    
+    def __init__(self, request_delay: float):
+        self._last_request_time: float = 0.0
+        self._request_delay = request_delay
+    
+    async def acquire(self) -> None:
+        """Acquire rate limit, sleeping if necessary."""
+        current_time = time.monotonic()
+        time_since_last = current_time - self._last_request_time
+        delay = max(0, self._request_delay - time_since_last)
+        
+        if delay > 0:
+            await asyncio.sleep(delay)
+        
+        self._last_request_time = time.monotonic()
 
 
 class BookBot(commands.Bot):
     
     def __init__(self):
         intents = discord.Intents.default()
-        super().__init__(
-            command_prefix=DISCORD.prefix,
-            intents=intents,
-            help_command=None
-        )
+        super().__init__(intents=intents, command_prefix=None)
         
-        self.session = create_session()
+        self.session = None
+        self.rate_limiter = RateLimiter(RATE_LIMIT_REQUEST_DELAY)
     
     async def setup_hook(self):
+        self.session = create_session()
+        
         self.tree.add_command(create_book_command())
         self.tree.add_command(create_help_command())
-        self.tree.add_command(create_google_command())
         
-        print("Syncing slash commands...")
+        logger.info("Syncing slash commands...")
         await self.tree.sync()
-        print("Slash commands synced!")
+        logger.info("Slash commands synced!")
     
     async def on_ready(self):
-        """Called when bot is ready."""
-        print(f"Logged in as {self.user}!")
-        print(f"Bot ready for DMs and servers with slash commands.")
+        logger.info(f"Logged in as {self.user}!")
+        logger.info("Bot ready for DMs and servers with slash commands.")
     
-    async def on_message(self, message: discord.Message):
-        """Handle messages - only process commands (no privileged intent needed)."""
-        if message.author == self.user:
-            return
-        await self.process_commands(message)
+    async def close(self):
+        """Clean up resources on shutdown."""
+        logger.info("Closing bot session...")
+        if self.session:
+            await self.session.close()
+        await super().close()
 
 
 def main():
-    """Entry point for the bot."""
-    token = DISCORD.token
+    token = DISCORD_TOKEN
     
     if not token:
-        print("Error: No Discord token found. Please set DISCORD_TOKEN  in .env")
+        logger.error("No Discord token found. Please set DISCORD_TOKEN in .env")
         return
     
     bot = BookBot()

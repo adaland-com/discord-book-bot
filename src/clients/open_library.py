@@ -1,19 +1,38 @@
-"""Functional Open Library API client."""
-import time
+import asyncio
 import logging
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-from functools import wraps
-import requests
+from urllib.parse import quote_plus
+import aiohttp
 
-from config import OPEN_LIBRARY, RATE_LIMIT, CACHE
+from config import OPEN_LIBRARY_BASE_URL, OPEN_LIBRARY_SEARCH_ENDPOINT, OPEN_LIBRARY_WORKS_ENDPOINT, OPEN_LIBRARY_BOOKS_ENDPOINT, OPEN_LIBRARY_COVERS_URL, RATE_LIMIT_MAX_RETRIES, RATE_LIMIT_RETRY_DELAY, SEARCH_MAX_RESULTS, SEARCH_TIMEOUT, SEARCH_COVER_SIZE
+
+# Module-level constants
+_MIN_DESC_LENGTH = 10
+_MIN_SENTENCE_LENGTH = 5
+
+# Open Library API search fields - used for validation
+_SEARCH_FIELDS = [
+    'key', 'title', 'description', 'author_name', 'author_key',
+    'first_publish_year', 'cover_i', 'ratings_average', 'subject',
+    'language', 'edition_count', 'isbn'
+]
 
 logger = logging.getLogger(__name__)
 
 
+class APIError(Exception):
+    """Raised when API request fails after retries."""
+    pass
+
+
+class BookNotFoundError(Exception):
+    """Raised when no book is found for the given query."""
+    pass
+
+
 @dataclass(frozen=True)
 class BookData:
-    """Immutable book data structure."""
     title: str
     author: str
     rating: Optional[float]
@@ -27,235 +46,163 @@ class BookData:
     edition_count: int
 
 
-# Simple in-memory cache storage
-_cache_store: Dict[str, tuple[float, Any]] = {}
-
-
-def _get_cache_key(query: str, limit: int, language: Optional[str]) -> str:
-    """Generate cache key for query."""
-    return f"ol_search_{query.lower().strip()}_{limit}_{language}"
-
-
-def _get_from_cache(cache_key: str) -> Optional[Any]:
-    """Get result from cache if available and not expired."""
-    if not CACHE.enabled:
-        return None
-    
-    cached = _cache_store.get(cache_key)
-    if cached:
-        timestamp, data = cached
-        if (time.time() - timestamp) < CACHE.ttl_seconds:
-            logger.debug(f"Cache hit for key: {cache_key}")
-            return data
-    return None
-
-
-def _store_in_cache(cache_key: str, data: Any) -> None:
-    """Store result in cache."""
-    if CACHE.enabled:
-        _cache_store[cache_key] = (time.time(), data)
-        logger.debug(f"Stored in cache: {cache_key}")
-
-
-def _rate_limited_request(
-    session: requests.Session,
+async def _make_request_with_retry(
+    session: aiohttp.ClientSession,
     url: str,
     params: Optional[Dict] = None,
-    timeout: int = 10
-) -> requests.Response:
-    """Make a rate-limited HTTP request."""
-    # Simple rate limiting using module-level last request time
-    current_time = time.time()
-    if hasattr(_rate_limited_request, '_last_request_time'):
-        time_since_last = current_time - _rate_limited_request._last_request_time
-        if time_since_last < RATE_LIMIT.request_delay:
-            delay = RATE_LIMIT.request_delay - time_since_last
-            logger.debug(f"Rate limiting: sleeping for {delay:.2f}s")
-            time.sleep(delay)
-    
-    response = session.get(url, params=params, timeout=timeout)
-    _rate_limited_request._last_request_time = time.time()
-    return response
-
-
-def _make_request_with_retry(
-    session: requests.Session,
-    url: str,
-    params: Optional[Dict] = None,
-    max_retries: int = RATE_LIMIT.max_retries
-) -> Optional[Dict]:
+    max_retries: int = RATE_LIMIT_MAX_RETRIES,
+    timeout: int = SEARCH_TIMEOUT
+) -> Dict:
     """Make HTTP request with exponential backoff retry."""
     for attempt in range(max_retries):
         try:
-            response = _rate_limited_request(session, url, params)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=timeout)) as response:
+                response.raise_for_status()
+                return await response.json()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             if attempt == max_retries - 1:
                 logger.error(f"Request failed after {max_retries} attempts: {e}")
-                return None
+                raise APIError(f"Request failed after {max_retries} attempts: {e}")
             
-            wait_time = RATE_LIMIT.retry_delay * (2 ** attempt)
+            wait_time = RATE_LIMIT_RETRY_DELAY * (2 ** attempt)
             logger.warning(f"Request failed (attempt {attempt + 1}), retrying in {wait_time}s: {e}")
-            time.sleep(wait_time)
-    
-    return None
+            await asyncio.sleep(wait_time)
 
 
-def search_books(
-    session: requests.Session,
+async def search_books(
+    session: aiohttp.ClientSession,
     query: str,
-    limit: int = 10,
+    limit: int = SEARCH_MAX_RESULTS,
     language: Optional[str] = None
-) -> Optional[Dict[str, Any]]:
-    """Search for books using Open Library API."""
+) -> Dict[str, Any]:
     logger.info(f"Searching Open Library for: '{query}' (limit={limit})")
     
-    cache_key = _get_cache_key(query, limit, language)
-    cached_result = _get_from_cache(cache_key)
-    if cached_result is not None:
-        return cached_result
-    
-    url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.search_endpoint}"
+    url = f"{OPEN_LIBRARY_BASE_URL}{OPEN_LIBRARY_SEARCH_ENDPOINT}"
     params = {
         'q': query,
         'limit': limit,
-        'fields': 'key,title,description,author_name,author_key,first_publish_year,cover_i,ratings_average,subject,language,edition_count,isbn'
+        'fields': ','.join(_SEARCH_FIELDS)
     }
     
     if language:
         params['language'] = language
     
-    data = _make_request_with_retry(session, url, params)
-    if data is None:
-        return None
+    data = await _make_request_with_retry(session, url, params)
+    
+    # Validate response structure to detect schema drift
+    docs = data.get('docs', [])
+    if docs and isinstance(docs[0], dict):
+        missing_fields = [f for f in _SEARCH_FIELDS if f not in docs[0]]
+        if missing_fields:
+            logger.warning(f"Open Library API response missing expected fields: {missing_fields}")
     
     result = {
         'numFound': data.get('numFound', 0),
-        'books': data.get('docs', [])
+        'books': docs
     }
     
-    _store_in_cache(cache_key, result)
     return result
 
 
-def get_book_details(
-    session: requests.Session,
+async def get_book_details(
+    session: aiohttp.ClientSession,
     work_key: str
-) -> Optional[Dict]:
-    """Get detailed information about a specific book work."""
+) -> Dict:
     logger.info(f"Getting book details for work: {work_key}")
     
-    cache_key = f"ol_details_{work_key}"
-    cached_result = _get_from_cache(cache_key)
-    if cached_result is not None:
-        return cached_result
-    
-    # Remove /works/ prefix if present
     if work_key.startswith('/works/'):
-        work_key = work_key[7:]
+        work_key = work_key.replace('/works/', '', 1)
     
-    url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.works_endpoint}/{work_key}.json"
-    data = _make_request_with_retry(session, url)
-    
-    if data:
-        _store_in_cache(cache_key, data)
-    
-    return data
+    url = f"{OPEN_LIBRARY_BASE_URL}{OPEN_LIBRARY_WORKS_ENDPOINT}/{work_key}.json"
+    return await _make_request_with_retry(session, url)
 
 
-def get_edition_details(
-    session: requests.Session,
+async def get_edition_details(
+    session: aiohttp.ClientSession,
     edition_key: str
-) -> Optional[Dict]:
-    """Get detailed information about a specific edition."""
+) -> Dict:
     logger.info(f"Getting edition details for: {edition_key}")
     
-    cache_key = f"ol_edition_{edition_key}"
-    cached_result = _get_from_cache(cache_key)
-    if cached_result is not None:
-        return cached_result
-    
-    # Remove /books/ prefix if present
     if edition_key.startswith('/books/'):
-        edition_key = edition_key[7:]
+        edition_key = edition_key.replace('/books/', '', 1)
     
-    url = f"{OPEN_LIBRARY.base_url}{OPEN_LIBRARY.books_endpoint}/{edition_key}.json"
-    data = _make_request_with_retry(session, url)
-    
-    if data:
-        _store_in_cache(cache_key, data)
-    
-    return data
+    url = f"{OPEN_LIBRARY_BASE_URL}{OPEN_LIBRARY_BOOKS_ENDPOINT}/{edition_key}.json"
+    return await _make_request_with_retry(session, url)
 
 
-def _extract_description(work_details: Optional[Dict]) -> str:
-    """Extract description from work details."""
-    if not work_details:
-        return "No description available."
-    
-    desc = work_details.get('description')
+def _extract_description(data: Dict) -> str:
+    """Extract description from work details or search result data."""
+    desc = data.get('description', '')
     if isinstance(desc, dict):
         desc = desc.get('value', '')
+    elif isinstance(desc, list):
+        desc = ' '.join(str(d) for d in desc)
     
-    if desc and len(str(desc).strip()) > 10:
-        return str(desc).strip()
+    desc_str = str(desc).strip()
+    if len(desc_str) > _MIN_DESC_LENGTH:
+        return desc_str
     
-    # Fallback to first sentence
-    first_sentence = work_details.get('first_sentence')
+    first_sentence = data.get('first_sentence', '')
     if isinstance(first_sentence, dict):
         first_sentence = first_sentence.get('value', '')
-    if first_sentence and len(str(first_sentence).strip()) > 5:
-        return f"First sentence: {str(first_sentence).strip()}"
+    elif isinstance(first_sentence, list):
+        first_sentence = ' '.join(str(s) for s in first_sentence)
     
-    return "No description available."
+    fs_str = str(first_sentence).strip()
+    if len(fs_str) > _MIN_SENTENCE_LENGTH:
+        return f"First sentence: {fs_str}"
+    
+    return ""
 
 
-def fetch_description(
-    session: requests.Session,
+async def fetch_description(
+    session: aiohttp.ClientSession,
     work_key: Optional[str]
 ) -> str:
-    """Fetch description from work details API."""
+    """Fetch book description. Returns empty string on error or if no description."""
     if not work_key:
-        return "No description available."
+        return ""
     
     try:
-        details = get_book_details(session, work_key)
+        details = await get_book_details(session, work_key)
         return _extract_description(details)
-    except Exception as e:
+    except (aiohttp.ClientError, asyncio.TimeoutError, APIError) as e:
         logger.warning(f"Failed to fetch description for {work_key}: {e}")
-        return "No description available."
+        return ""
 
 
-def _get_cover_url(ol_book: Dict, session: requests.Session) -> str:
-    """Extract or construct cover URL."""
+def _get_cover_url(ol_book: Dict) -> str:
     cover_id = ol_book.get('cover_i')
     if cover_id:
-        return f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg"
+        return f"https://covers.openlibrary.org/b/id/{cover_id}{SEARCH_COVER_SIZE}"
     
-    # Fallback to ISBN-based cover
     isbns = ol_book.get('isbn', [])
-    if isbns:
-        isbn = isbns[0].replace("-", "").replace(" ", "")
-        return f"{OPEN_LIBRARY.covers_url}/b/isbn/{isbn}-M.jpg"
+    if isinstance(isbns, list) and isbns and isinstance(isbns[0], str):
+        isbn = isbns[0].translate(str.maketrans('', '', '- '))
+        return f"{OPEN_LIBRARY_COVERS_URL}/b/isbn/{isbn}{SEARCH_COVER_SIZE}"
     
     return ""
 
 
 def _build_goodreads_link(title: Optional[str], author: Optional[str]) -> str:
-    """Build Goodreads search link."""
+    """Build Goodreads search URL."""
+    def encode_query(text: str) -> str:
+        return quote_plus(text)
+    
+    if title and author:
+        return f"https://www.goodreads.com/search?q={encode_query(f'title:{title} author:{author}')}"
     if title:
-        return f"https://www.goodreads.com/search?q={title}"
+        return f"https://www.goodreads.com/search?q={encode_query(f'title:{title}')}"
     if author:
-        return f"https://www.goodreads.com/search?q={author}"
+        return f"https://www.goodreads.com/search?q={encode_query(f'author:{author}')}"
     return "https://www.goodreads.com"
 
 
-def convert_to_book_data(
-    session: requests.Session,
+async def fetch_and_convert_book_data(
+    session: aiohttp.ClientSession,
     ol_book: Dict
 ) -> BookData:
-    """Convert Open Library book data to standard BookData format."""
+    """Convert Open Library search result to BookData."""
     authors = ol_book.get('author_name', [])
     author = ', '.join(authors) if authors else "Unknown Author"
     
@@ -263,8 +210,12 @@ def convert_to_book_data(
     if rating is not None:
         rating = float(rating)
     
-    cover_url = _get_cover_url(ol_book, session)
-    description = fetch_description(session, ol_book.get('key'))
+    cover_url = _get_cover_url(ol_book)
+    
+    description = _extract_description(ol_book)
+    if not description:
+        fetched = await fetch_description(session, ol_book.get('key'))
+        description = fetched or "No description available."
     
     title = ol_book.get('title', 'Unknown Title')
     
@@ -283,10 +234,19 @@ def convert_to_book_data(
     )
 
 
-def create_session() -> requests.Session:
-    """Create a configured requests session."""
-    session = requests.Session()
-    session.headers.update({
-        'User-Agent': 'Discord-Book-Bot/1.0 (https://github.com/your-repo)'
-    })
-    return session
+def create_session() -> aiohttp.ClientSession:
+    return aiohttp.ClientSession(
+        headers={
+            'User-Agent': 'Discord-Book-Bot/1.0 (https://github.com/adaland-com/discord-book-bot)'
+        }
+    )
+
+
+def build_search_query(title: Optional[str], author: Optional[str]) -> str:
+    parts = []
+    if title:
+        parts.append(f'title:"{title}"')
+    if author:
+        parts.append(f'author:"{author}"')
+    return ' '.join(parts)
+
