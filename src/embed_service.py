@@ -48,12 +48,6 @@ def create_book_embed(book_info: BookData) -> discord.Embed:
         inline=False
     )
     
-    embed.add_field(
-        name=f"{EMBED_EMOJI_ARCHIVE} Anna's Archive",
-        value=EMBED_ARCHIVE_LINK,
-        inline=False
-    )
-    
     return embed
 
 
